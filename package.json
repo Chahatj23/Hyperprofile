@@ -1,0 +1,23 @@
+{
+  "name": "hyperprofile",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm run docker:up && concurrently -n api,web,worker -c blue,green,magenta \"pnpm --filter @hyperprofile/api dev\" \"pnpm --filter @hyperprofile/web dev\" \"pnpm --filter @hyperprofile/worker dev\"",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "db:generate": "pnpm --filter @hyperprofile/db generate",
+    "db:migrate": "pnpm --filter @hyperprofile/db migrate",
+    "db:seed": "pnpm --filter @hyperprofile/db seed",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "ci": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

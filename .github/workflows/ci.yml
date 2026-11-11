@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hyperprofile
+          POSTGRES_PASSWORD: hyperprofile
+          POSTGRES_DB: hyperprofile
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hyperprofile -d hyperprofile"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgres://hyperprofile:hyperprofile@localhost:5432/hyperprofile
+      REDIS_URL: redis://localhost:6379
+      SESSION_SECRET: ci-session-secret-at-least-32-chars
+      TOKEN_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      META_APP_ID: "000000000000000"
+      META_APP_SECRET: "ci-secret"
+      META_LOGIN_CONFIG_ID: "000"
+      META_REDIRECT_URI: https://example.com/api/auth/instagram/callback
+      WEB_ORIGIN: http://localhost:3000
+      API_PORT: "4000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm --filter @hyperprofile/db migrate
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @hyperprofile/shared build
+      - run: pnpm --filter @hyperprofile/db build
+      - run: pnpm --filter @hyperprofile/meta build
+      - run: pnpm --filter @hyperprofile/payments build
+      - run: pnpm --filter @hyperprofile/api build
+      - run: pnpm --filter @hyperprofile/worker build
+      - run: pnpm --filter @hyperprofile/web build

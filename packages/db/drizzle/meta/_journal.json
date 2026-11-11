@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1762444800000,
+      "tag": "0000_phase0",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762452000000,
+      "tag": "0001_autodm",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762455600000,
+      "tag": "0002_tracked_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794067542830,
+      "tag": "0003_equal_the_hand",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794067894759,
+      "tag": "0004_amazing_warhawk",
+      "breakpoints": true
+    }
+  ]
+}
