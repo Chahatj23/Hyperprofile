@@ -30,3 +30,4 @@ COPY claimed-comments.json ./claimed-comments.json
 
 EXPOSE 4000
 CMD ["node", "apps/api/dist/index.js"]
+

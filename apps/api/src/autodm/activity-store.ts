@@ -70,6 +70,18 @@ export function recordActivity(
   item: Omit<ActivityItem, "id" | "timestamp"> & { id?: string; timestamp?: string },
 ): ActivityItem {
   const activities = loadStoredActivities();
+  const commentId = (item.meta?.commentId as string) || (item.meta?.comment_id as string);
+  if (commentId) {
+    const existing = activities.find(
+      (a) =>
+        a.type === item.type &&
+        ((a.meta?.commentId as string) === commentId || (a.meta?.comment_id as string) === commentId),
+    );
+    if (existing) {
+      return existing;
+    }
+  }
+
   const entry: ActivityItem = {
     ...item,
     mediaThumbnail: item.mediaThumbnail || DEFAULT_COVER,

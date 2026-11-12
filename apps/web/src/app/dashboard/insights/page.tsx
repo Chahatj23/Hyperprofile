@@ -112,12 +112,12 @@ export default function DashboardInsightsPage() {
   }, [loadOverview, loadActivities]);
 
   // Extract real metric values from Meta Graph response
-  const reachMetric = data?.insights.find((m) => m.name === "reach")?.values[0]?.value ?? 2;
-  const viewsMetric = data?.insights.find((m) => m.name === "views")?.values[0]?.value ?? 4;
-  const interactionsMetric = data?.insights.find((m) => m.name === "total_interactions")?.values[0]?.value ?? 1;
-  const engagedMetric = data?.insights.find((m) => m.name === "accounts_engaged")?.values[0]?.value ?? 1;
-  const profileViewsMetric = data?.insights.find((m) => m.name === "profile_views")?.values[0]?.value ?? 1;
-  const websiteClicksMetric = data?.insights.find((m) => m.name === "website_clicks")?.values[0]?.value ?? 0;
+  const reachMetric = data?.insights.find((m) => m.name === "reach")?.values[0]?.value ?? (pending ? "…" : 0);
+  const viewsMetric = data?.insights.find((m) => m.name === "views")?.values[0]?.value ?? (pending ? "…" : 0);
+  const interactionsMetric = data?.insights.find((m) => m.name === "total_interactions")?.values[0]?.value ?? (pending ? "…" : 0);
+  const engagedMetric = data?.insights.find((m) => m.name === "accounts_engaged")?.values[0]?.value ?? (pending ? "…" : 0);
+  const profileViewsMetric = data?.insights.find((m) => m.name === "profile_views")?.values[0]?.value ?? (pending ? "…" : 0);
+  const websiteClicksMetric = data?.insights.find((m) => m.name === "website_clicks")?.values[0]?.value ?? (pending ? "…" : 0);
 
   return (
     <div style={{ maxWidth: "1280px", margin: "0 auto", color: "#111827", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
@@ -398,13 +398,13 @@ export default function DashboardInsightsPage() {
                       ❤️ <strong>{data.media[0].likeCount ?? 0}</strong> Likes
                     </span>
                     <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                      💬 <strong>{data.media[0].commentsCount ?? 1}</strong> Comments
+                      💬 <strong>{data.media[0].commentsCount ?? 0}</strong> Comments
                     </span>
                     <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                      👁️ <strong>4</strong> Views
+                      👁️ <strong>{String(data.media[0].insights?.find((i) => i.name === "views")?.values?.[0]?.value ?? viewsMetric)}</strong> Views
                     </span>
                     <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                      🌐 <strong>2</strong> Reach
+                      🌐 <strong>{String(data.media[0].insights?.find((i) => i.name === "reach")?.values?.[0]?.value ?? reachMetric)}</strong> Reach
                     </span>
                   </div>
                 </div>
@@ -454,7 +454,7 @@ export default function DashboardInsightsPage() {
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #f3f4f6", paddingTop: "10px" }}>
                     <div style={{ fontSize: "0.78rem", color: "#6b7280" }}>
-                      ❤️ {m.likeCount ?? 0} · 💬 {m.commentsCount ?? 1}
+                      ❤️ {m.likeCount ?? 0} · 💬 {m.commentsCount ?? 0}
                     </div>
 
                     <Link
