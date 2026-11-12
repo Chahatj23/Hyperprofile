@@ -4,7 +4,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
-  API_PORT: z.coerce.number().default(4000),
+  API_PORT: z.coerce.number().default(Number(process.env.PORT) || 4000),
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
   SESSION_SECRET: z.string().min(32),
   TOKEN_ENCRYPTION_KEY: z

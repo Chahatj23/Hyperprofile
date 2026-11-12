@@ -1,0 +1,15 @@
+name: Keep Render Service Awake
+
+on:
+  schedule:
+    # Runs every 14 minutes (Render sleeps at 15 minutes)
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Health Endpoint
+        run: |
+          curl -sS --max-time 15 "https://hyperprofile-api.onrender.com/health" || true
