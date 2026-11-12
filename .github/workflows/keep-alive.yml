@@ -13,3 +13,4 @@ jobs:
       - name: Ping Health Endpoint
         run: |
           curl -sS --max-time 15 "https://hyperprofile-api.onrender.com/health" || true
+

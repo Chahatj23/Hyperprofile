@@ -12,6 +12,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { label: "Getting Started", href: "/dashboard/autodm", icon: "✨" },
     { label: "Leads", href: "/dashboard/leads", icon: "👥" },
     { label: "Payments", href: "/dashboard/orders", icon: "💳" },
+    { label: "Settings", href: "/dashboard/settings", icon: "⚙️" },
   ];
 
   const yourApps = [
@@ -289,12 +290,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main Content Area */}
       <main
+        className="dashboard-main"
         style={{
           flex: 1,
           background: "#f8fafc",
+          color: "#0f172a",
           minHeight: "100vh",
           overflowY: "auto",
-          padding: "24px 32px 80px",
+          padding: "28px 36px 80px",
           boxSizing: "border-box",
         }}
       >

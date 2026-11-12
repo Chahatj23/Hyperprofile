@@ -88,64 +88,82 @@ export default function OrdersAndLedgerPage() {
       setMsg("Order marked refunded in preview mode ✓");
     } finally {
       setRefundingId(null);
+      setTimeout(() => setMsg(""), 4000);
     }
   }
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+    <div style={{ maxWidth: "1120px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "1.6rem", margin: "0 0 4px" }}>Orders & Ledger</h1>
-          <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--muted)" }}>
-            Double-entry append-only accounting ledger. Never update or delete ledger rows.
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+            <span style={{ fontSize: "1.5rem" }}>💳</span>
+            <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>
+              Payments & Financial Ledger
+            </h1>
+          </div>
+          <p style={{ margin: 0, fontSize: "0.92rem", color: "#64748b" }}>
+            Double-entry append-only accounting ledger. Direct UPI settlement tracking.
           </p>
         </div>
 
-        {/* Balance Callout */}
+        {/* Balance Card */}
         <div
           style={{
-            padding: "10px 18px",
-            borderRadius: "12px",
-            background: "rgba(232, 165, 75, 0.12)",
-            border: "1px solid var(--accent)",
+            padding: "12px 20px",
+            borderRadius: "14px",
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
             textAlign: "right",
           }}
         >
-          <div style={{ fontSize: "0.75rem", color: "var(--accent)", fontWeight: 700 }}>
-            CREATOR PAYABLE BALANCE
+          <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Creator Net Balance
           </div>
-          <div style={{ fontSize: "1.4rem", fontWeight: 800 }}>{balanceFormatted}</div>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#10b981", marginTop: "2px" }}>
+            {balanceFormatted}
+          </div>
         </div>
       </div>
 
+      {/* Alert toast */}
       {msg && (
         <div
           style={{
-            padding: "10px 16px",
-            borderRadius: "8px",
-            background: "rgba(52, 211, 153, 0.15)",
-            color: "#34d399",
-            marginBottom: "16px",
-            fontSize: "0.85rem",
+            padding: "12px 18px",
+            borderRadius: "12px",
+            background: "#ecfdf5",
+            border: "1px solid #a7f3d0",
+            color: "#065f46",
+            fontSize: "0.9rem",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 2px 4px rgba(16, 185, 129, 0.08)",
           }}
         >
-          {msg}
+          <span>🎉</span>
+          <span>{msg}</span>
         </div>
       )}
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: "12px", marginBottom: "16px", borderBottom: "1px solid var(--line)", paddingBottom: "8px" }}>
+      {/* Navigation Tabs */}
+      <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid #e2e8f0", paddingBottom: "12px" }}>
         <button
           onClick={() => setTab("orders")}
           style={{
-            background: "none",
+            padding: "8px 18px",
+            borderRadius: "10px",
             border: "none",
-            color: tab === "orders" ? "var(--accent)" : "var(--muted)",
+            background: tab === "orders" ? "#eff6ff" : "transparent",
+            color: tab === "orders" ? "#0066fe" : "#64748b",
             fontWeight: 700,
-            fontSize: "0.95rem",
+            fontSize: "0.9rem",
             cursor: "pointer",
-            borderBottom: tab === "orders" ? "2px solid var(--accent)" : "none",
-            paddingBottom: "8px",
+            transition: "all 0.15s ease",
           }}
         >
           Orders History ({orders.length})
@@ -153,169 +171,208 @@ export default function OrdersAndLedgerPage() {
         <button
           onClick={() => setTab("ledger")}
           style={{
-            background: "none",
+            padding: "8px 18px",
+            borderRadius: "10px",
             border: "none",
-            color: tab === "ledger" ? "var(--accent)" : "var(--muted)",
+            background: tab === "ledger" ? "#eff6ff" : "transparent",
+            color: tab === "ledger" ? "#0066fe" : "#64748b",
             fontWeight: 700,
-            fontSize: "0.95rem",
+            fontSize: "0.9rem",
             cursor: "pointer",
-            borderBottom: tab === "ledger" ? "2px solid var(--accent)" : "none",
-            paddingBottom: "8px",
+            transition: "all 0.15s ease",
           }}
         >
-          Append-Only Ledger Postings ({ledgerEntries.length})
+          Append-Only Ledger ({ledgerEntries.length})
         </button>
       </div>
 
-      {/* Orders Tab */}
+      {/* Orders Tab Content */}
       {tab === "orders" && (
-        <div className="card" style={{ width: "100%", padding: 0, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--line)", background: "rgba(255,255,255,0.02)" }}>
-                <th style={{ padding: "14px 18px", textAlign: "left" }}>Receipt</th>
-                <th style={{ padding: "14px 18px", textAlign: "left" }}>Buyer</th>
-                <th style={{ padding: "14px 18px", textAlign: "left" }}>Item</th>
-                <th style={{ padding: "14px 18px", textAlign: "right" }}>Amount</th>
-                <th style={{ padding: "14px 18px", textAlign: "center" }}>Status</th>
-                <th style={{ padding: "14px 18px", textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "48px 16px", textAlign: "center", color: "var(--muted)" }}>
-                    <div style={{ fontSize: "1.6rem", marginBottom: "8px" }}>📦</div>
-                    <div style={{ fontWeight: 600, color: "var(--ink)", marginBottom: "4px" }}>No orders yet</div>
-                    <div style={{ fontSize: "0.82rem" }}>When buyers complete purchases via UPI or card, verified orders appear here.</div>
-                  </td>
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "16px",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem", textAlign: "left" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  <th style={{ padding: "14px 20px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase" }}>Receipt</th>
+                  <th style={{ padding: "14px 20px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase" }}>Buyer</th>
+                  <th style={{ padding: "14px 20px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase" }}>Item</th>
+                  <th style={{ padding: "14px 20px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase", textAlign: "right" }}>Amount</th>
+                  <th style={{ padding: "14px 20px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase", textAlign: "center" }}>Status</th>
+                  <th style={{ padding: "14px 20px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
                 </tr>
-              ) : orders.map((o) => (
-                <tr key={o.id} style={{ borderBottom: "1px solid var(--line)" }}>
-                  <td style={{ padding: "16px 18px" }}>
-                    <div style={{ fontWeight: 700, fontFamily: "monospace" }}>{o.receipt}</div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-                      {new Date(o.createdAt).toLocaleDateString("en-IN")}
-                    </div>
-                  </td>
-                  <td style={{ padding: "16px 18px" }}>
-                    <div>{o.buyerName}</div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{o.buyerEmail}</div>
-                  </td>
-                  <td style={{ padding: "16px 18px" }}>
-                    <div>{o.productTitle}</div>
-                    <span style={{ fontSize: "0.75rem", color: "var(--accent)" }}>{o.productType}</span>
-                  </td>
-                  <td style={{ padding: "16px 18px", textAlign: "right", fontWeight: 700 }}>
-                    {o.netAmountFormatted}
-                  </td>
-                  <td style={{ padding: "16px 18px", textAlign: "center" }}>
-                    <span
-                      style={{
-                        padding: "3px 8px",
-                        borderRadius: "6px",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        background:
-                          o.status === "paid"
-                            ? "rgba(52, 211, 153, 0.15)"
-                            : o.status === "refunded"
-                              ? "rgba(239, 68, 68, 0.15)"
-                              : "rgba(232, 165, 75, 0.15)",
-                        color:
-                          o.status === "paid"
-                            ? "#34d399"
-                            : o.status === "refunded"
-                              ? "#f87171"
-                              : "var(--accent)",
-                      }}
-                    >
-                      {o.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: "16px 18px", textAlign: "right" }}>
-                    {o.status === "paid" && (
-                      <button
-                        onClick={() => handleRefund(o.id)}
-                        disabled={refundingId === o.id}
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "6px",
-                          background: "rgba(239, 68, 68, 0.15)",
-                          color: "#f87171",
-                          border: "1px solid rgba(239, 68, 68, 0.3)",
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {refundingId === o.id ? "Refunding..." : "Refund"}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+                      Loading orders history...
+                    </td>
+                  </tr>
+                ) : orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "60px 20px", textAlign: "center" }}>
+                      <div style={{ fontSize: "2.4rem", marginBottom: "10px" }}>📦</div>
+                      <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                        No orders recorded yet
+                      </div>
+                      <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                        When buyers complete purchases via UPI or Card, orders appear here with instant ledger postings.
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  orders.map((o) => (
+                    <tr key={o.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "16px 20px" }}>
+                        <div style={{ fontWeight: 700, fontFamily: "monospace", color: "#0f172a" }}>{o.receipt}</div>
+                        <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "2px" }}>
+                          {new Date(o.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+                        </div>
+                      </td>
+                      <td style={{ padding: "16px 20px" }}>
+                        <div style={{ fontWeight: 600, color: "#0f172a" }}>{o.buyerName || "Customer"}</div>
+                        <div style={{ fontSize: "0.82rem", color: "#64748b" }}>{o.buyerEmail}</div>
+                      </td>
+                      <td style={{ padding: "16px 20px" }}>
+                        <div style={{ fontWeight: 600, color: "#0f172a" }}>{o.productTitle}</div>
+                        <span style={{ fontSize: "0.75rem", color: "#0066fe", fontWeight: 600 }}>{o.productType}</span>
+                      </td>
+                      <td style={{ padding: "16px 20px", textAlign: "right", fontWeight: 800, color: "#0f172a" }}>
+                        {o.netAmountFormatted}
+                      </td>
+                      <td style={{ padding: "16px 20px", textAlign: "center" }}>
+                        <span
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: "20px",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            background:
+                              o.status === "paid"
+                                ? "#ecfdf5"
+                                : o.status === "refunded"
+                                ? "#fef2f2"
+                                : "#fffbeb",
+                            color:
+                              o.status === "paid"
+                                ? "#059669"
+                                : o.status === "refunded"
+                                ? "#dc2626"
+                                : "#d97706",
+                          }}
+                        >
+                          {o.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "16px 20px", textAlign: "right" }}>
+                        {o.status === "paid" && (
+                          <button
+                            onClick={() => handleRefund(o.id)}
+                            disabled={refundingId === o.id}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "8px",
+                              background: "#ffffff",
+                              color: "#dc2626",
+                              border: "1px solid #fecaca",
+                              fontSize: "0.8rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {refundingId === o.id ? "Refunding..." : "Issue Refund"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* Ledger Tab */}
+      {/* Ledger Tab Content */}
       {tab === "ledger" && (
-        <div className="card" style={{ width: "100%", padding: 0, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--line)", background: "rgba(255,255,255,0.02)" }}>
-                <th style={{ padding: "12px 16px", textAlign: "left" }}>Timestamp</th>
-                <th style={{ padding: "12px 16px", textAlign: "left" }}>Account</th>
-                <th style={{ padding: "12px 16px", textAlign: "left" }}>Idempotency Key</th>
-                <th style={{ padding: "12px 16px", textAlign: "center" }}>Direction</th>
-                <th style={{ padding: "12px 16px", textAlign: "right" }}>Amount (Paise)</th>
-                <th style={{ padding: "12px 16px", textAlign: "right" }}>Formatted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ledgerEntries.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "48px 16px", textAlign: "center", color: "var(--muted)" }}>
-                    <div style={{ fontSize: "1.6rem", marginBottom: "8px" }}>📑</div>
-                    <div style={{ fontWeight: 600, color: "var(--ink)", marginBottom: "4px" }}>No ledger postings yet</div>
-                    <div style={{ fontSize: "0.82rem" }}>Double-entry postings for payouts and platform fees will append here automatically.</div>
-                  </td>
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "16px",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem", textAlign: "left" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  <th style={{ padding: "12px 18px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase" }}>Timestamp</th>
+                  <th style={{ padding: "12px 18px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase" }}>Account</th>
+                  <th style={{ padding: "12px 18px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase" }}>Idempotency Key</th>
+                  <th style={{ padding: "12px 18px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase", textAlign: "center" }}>Direction</th>
+                  <th style={{ padding: "12px 18px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase", textAlign: "right" }}>Amount (Paise)</th>
+                  <th style={{ padding: "12px 18px", color: "#475569", fontWeight: 600, fontSize: "0.82rem", textTransform: "uppercase", textAlign: "right" }}>Net (INR)</th>
                 </tr>
-              ) : ledgerEntries.map((l) => (
-                <tr key={l.id} style={{ borderBottom: "1px solid var(--line)", fontFamily: "monospace" }}>
-                  <td style={{ padding: "12px 16px", color: "var(--muted)" }}>
-                    {new Date(l.createdAt).toLocaleTimeString("en-IN")}
-                  </td>
-                  <td style={{ padding: "12px 16px", fontWeight: 700 }}>{l.account}</td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.75rem", color: "var(--muted)" }}>
-                    {l.idempotencyKey}
-                  </td>
-                  <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                    <span
-                      style={{
-                        padding: "2px 6px",
-                        borderRadius: "4px",
-                        fontSize: "0.7rem",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        background: l.direction === "credit" ? "rgba(52, 211, 153, 0.15)" : "rgba(239, 68, 68, 0.15)",
-                        color: l.direction === "credit" ? "#34d399" : "#f87171",
-                      }}
-                    >
-                      {l.direction}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px 16px", textAlign: "right" }}>{l.amountPaise}</td>
-                  <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700 }}>
-                    {l.amountFormatted}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ledgerEntries.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "50px 20px", textAlign: "center" }}>
+                      <div style={{ fontSize: "2.2rem", marginBottom: "10px" }}>📑</div>
+                      <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                        No ledger postings yet
+                      </div>
+                      <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                        Financial credits, gateway fees, and payouts are automatically immutably appended here.
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  ledgerEntries.map((l) => (
+                    <tr key={l.id} style={{ borderBottom: "1px solid #f1f5f9", fontFamily: "monospace" }}>
+                      <td style={{ padding: "14px 18px", color: "#64748b" }}>
+                        {new Date(l.createdAt).toLocaleTimeString("en-IN")}
+                      </td>
+                      <td style={{ padding: "14px 18px", fontWeight: 700, color: "#0f172a" }}>{l.account}</td>
+                      <td style={{ padding: "14px 18px", fontSize: "0.78rem", color: "#64748b" }}>
+                        {l.idempotencyKey}
+                      </td>
+                      <td style={{ padding: "14px 18px", textAlign: "center" }}>
+                        <span
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            background: l.direction === "credit" ? "#ecfdf5" : "#fef2f2",
+                            color: l.direction === "credit" ? "#059669" : "#dc2626",
+                          }}
+                        >
+                          {l.direction}
+                        </span>
+                      </td>
+                      <td style={{ padding: "14px 18px", textAlign: "right", color: "#0f172a" }}>{l.amountPaise}</td>
+                      <td style={{ padding: "14px 18px", textAlign: "right", fontWeight: 800, color: l.direction === "credit" ? "#10b981" : "#dc2626" }}>
+                        {l.amountFormatted}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

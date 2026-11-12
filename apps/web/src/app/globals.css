@@ -432,3 +432,42 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+/* ========================================================
+   DASHBOARD CLEAN DESIGN THEME OVERRIDES
+   ======================================================== */
+.dashboard-main {
+  color: #0f172a !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+.dashboard-main h1,
+.dashboard-main h2,
+.dashboard-main h3,
+.dashboard-main h4 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  color: #0f172a !important;
+}
+
+.dashboard-main .card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  color: #0f172a !important;
+  backdrop-filter: none !important;
+}
+
+.dashboard-main .panel {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  color: #0f172a !important;
+  backdrop-filter: none !important;
+}
+
+.dashboard-main p {
+  color: inherit;
+}
+
