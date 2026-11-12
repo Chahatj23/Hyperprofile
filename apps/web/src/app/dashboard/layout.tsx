@@ -2,11 +2,40 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [appsOpen, setAppsOpen] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [creatorUser, setCreatorUser] = useState<{ displayName: string; slug: string; username?: string } | null>(null);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/v1/auth/me", { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.creator) {
+            setIsAuthenticated(true);
+            setCreatorUser({
+              displayName: data.creator.displayName || "Creator",
+              slug: data.creator.slug || "",
+              username: data.ig?.username || data.creator.slug || "",
+            });
+            return;
+          }
+        }
+        setIsAuthenticated(false);
+      } catch {
+        setIsAuthenticated(false);
+      } finally {
+        setAuthLoading(false);
+      }
+    }
+    checkAuth();
+  }, [pathname]);
 
   const mainNav = [
     { label: "Getting Started", href: "/dashboard/autodm", icon: "✨" },
@@ -22,9 +51,158 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { label: "Schedule", href: "/dashboard/builder", icon: "📅" },
   ];
 
+  // 1. Session verification loading state
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#f8fafc",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #0284c7 0%, #0066fe 100%)",
+              color: "#ffffff",
+              display: "grid",
+              placeItems: "center",
+              margin: "0 auto 16px",
+              fontSize: "1.3rem",
+              fontWeight: 800,
+              boxShadow: "0 4px 14px rgba(0, 102, 254, 0.3)",
+            }}
+          >
+            ✦
+          </div>
+          <div style={{ color: "#0f172a", fontSize: "0.95rem", fontWeight: 700 }}>
+            Verifying secure session...
+          </div>
+          <div style={{ color: "#64748b", fontSize: "0.82rem", marginTop: "4px" }}>
+            Checking authenticated creator credentials
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated Barrier: Protects private account data in Incognito or logged out sessions
+  if (!isAuthenticated) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#0a0e17",
+          padding: "20px",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            width: "min(460px, 100%)",
+            background: "#ffffff",
+            borderRadius: "24px",
+            padding: "44px 32px",
+            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "16px",
+              background: "linear-gradient(135deg, #0284c7 0%, #0066fe 100%)",
+              color: "#ffffff",
+              display: "grid",
+              placeItems: "center",
+              fontSize: "1.6rem",
+              fontWeight: 800,
+              margin: "0 auto 18px",
+              boxShadow: "0 4px 14px rgba(0, 102, 254, 0.35)",
+            }}
+          >
+            🔒
+          </div>
+          <h1
+            style={{
+              fontSize: "1.5rem",
+              fontWeight: 800,
+              color: "#0f172a",
+              margin: "0 0 8px",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Protected Creator Workspace
+          </h1>
+          <p
+            style={{
+              fontSize: "0.9rem",
+              color: "#64748b",
+              margin: "0 0 28px",
+              lineHeight: 1.5,
+            }}
+          >
+            This dashboard contains private creator tools, audience leads, and AutoDM rules. Please sign in with your Instagram account to access your workspace.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <Link
+              href="/connect"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "10px",
+                padding: "13px 20px",
+                borderRadius: "12px",
+                background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+                color: "#ffffff",
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                textDecoration: "none",
+                boxShadow: "0 4px 14px rgba(220, 39, 67, 0.3)",
+              }}
+            >
+              <span>📸</span>
+              <span>Sign In with Instagram</span>
+            </Link>
+
+            <Link
+              href="/"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "11px 20px",
+                borderRadius: "12px",
+                background: "#f1f5f9",
+                color: "#475569",
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              ← Back to Homepage
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Authenticated Session: Render Full Creator Workspace
   return (
     <div style={{ minHeight: "100vh", display: "flex", background: "#f8fafc", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
-      {/* SuperProfile Left Sidebar matching Screenshot 2 */}
+      {/* SuperProfile Left Sidebar */}
       <aside
         style={{
           width: "248px",
@@ -45,7 +223,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {/* Top: Logo & Nav items */}
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          {/* SuperProfile Logo matching Screenshot 2 */}
+          {/* SuperProfile Logo */}
           <Link
             href="/dashboard/autodm"
             style={{
@@ -196,43 +374,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        {/* Bottom Section: AI Apps & User Profile matching Screenshot 2 */}
+        {/* Bottom Section: User Profile */}
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {/* Use with your AI apps badge */}
-          <div
-            style={{
-              padding: "10px 12px",
-              borderRadius: "12px",
-              background: "rgba(255, 255, 255, 0.04)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "0.78rem",
-              color: "#e2e8f0",
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
-          >
-            <div
-              style={{
-                width: "20px",
-                height: "20px",
-                borderRadius: "6px",
-                background: "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)",
-                display: "grid",
-                placeItems: "center",
-                fontSize: "0.65rem",
-                color: "#fff",
-              }}
-            >
-              ✦
-            </div>
-            <span>Use with your AI apps</span>
-          </div>
-
           {/* Connected User Profile Card */}
-          <div
+          <Link
+            href="/dashboard/settings"
             style={{
               padding: "10px 12px",
               borderRadius: "12px",
@@ -241,6 +387,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               alignItems: "center",
               justifyContent: "space-between",
               border: "1px solid rgba(255,255,255,0.06)",
+              textDecoration: "none",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -269,22 +416,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     fontWeight: 700,
                   }}
                 >
-                  J
+                  {creatorUser?.displayName?.charAt(0).toUpperCase() || "C"}
                 </div>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#f8fafc", lineHeight: 1.2 }}>
-                  jinbandhan
+                  {creatorUser?.displayName || "Creator"}
                 </span>
                 <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                  @jinbandhan
+                  @{creatorUser?.username || creatorUser?.slug || "creator"}
                 </span>
               </div>
             </div>
 
-            <span style={{ color: "#64748b", fontSize: "0.8rem" }}>^</span>
-          </div>
+            <span style={{ color: "#64748b", fontSize: "0.8rem" }}>⚙</span>
+          </Link>
         </div>
       </aside>
 

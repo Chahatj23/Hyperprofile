@@ -98,15 +98,15 @@ export default function AutoDmPage() {
 
   // Step 2: and comments... & public reply
   const [triggerType, setTriggerType] = useState<"keyword" | "any">("keyword");
-  const [keyword, setKeyword] = useState<string>("TRIP");
-  const [publicReply, setPublicReply] = useState<string>("Jai Jinendra! 🙏❤️ Details sent you in DM.");
+  const [keyword, setKeyword] = useState<string>("LINK");
+  const [publicReply, setPublicReply] = useState<string>("Sent to your DM! Check your inbox ✨");
 
   // Step 3: then send them the primary DM & CTA button
   const [ruleName, setRuleName] = useState<string>("");
-  const [message, setMessage] = useState<string>("Jai Jinendra! 🙏❤️ Here are the complete details and itinerary for Gujarat Getaway: {link}");
-  const [ctaButtonText, setCtaButtonText] = useState<string>("Fill out form Here!!");
-  const [ctaButtonUrl, setCtaButtonUrl] = useState<string>("https://superprofile.bio/gujarat-getaway");
-  const [link, setLink] = useState<string>("https://superprofile.bio/gujarat-getaway");
+  const [message, setMessage] = useState<string>("Hey there! Thanks for your comment. Here is the link you requested: {link}");
+  const [ctaButtonText, setCtaButtonText] = useState<string>("Get Access Now");
+  const [ctaButtonUrl, setCtaButtonUrl] = useState<string>("");
+  const [link, setLink] = useState<string>("");
   const [askToFollow, setAskToFollow] = useState<boolean>(false);
   const [requireEmail, setRequireEmail] = useState<boolean>(false);
   const [ruleActive, setRuleActive] = useState<boolean>(true);
@@ -128,9 +128,9 @@ export default function AutoDmPage() {
     connectedAccount: string;
     isHealthy: boolean;
   }>({
-    webhookUrl: "https://telecharger-incoming-icon-filled.trycloudflare.com/webhooks/instagram",
+    webhookUrl: "https://hyperprofile-api.onrender.com/webhooks/instagram",
     verifyToken: "vg0p4acutjrfdi62n8lko7mysh3q5x9w",
-    connectedAccount: "jinbandhan",
+    connectedAccount: "",
     isHealthy: true,
   });
   const [testingPipeline, setTestingPipeline] = useState(false);

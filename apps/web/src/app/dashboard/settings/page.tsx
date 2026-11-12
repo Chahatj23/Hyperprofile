@@ -15,27 +15,18 @@ export default function SettingsPage() {
   useEffect(() => {
     async function loadProfile() {
       try {
-        const res = await fetch("/v1/auth/me");
+        const res = await fetch("/v1/auth/me", { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           if (data.creator) {
-            setDisplayName(data.creator.displayName || "Jinbandhan");
-            setSlug(data.creator.slug || "jinbandhan");
-            setBio(data.creator.bio || "Verified Jain Matrimony & Community Profiles");
+            setDisplayName(data.creator.displayName || "");
+            setSlug(data.creator.slug || "");
+            setBio(data.creator.bio || "");
             setCurrentPlan(data.creator.plan || "creator");
           }
-        } else {
-          // Fallback initial values if unauthenticated preview
-          setDisplayName("Jinbandhan");
-          setSlug("jinbandhan");
-          setBio("Verified Jain Matrimony & Community Profiles");
-          setCurrentPlan("creator");
         }
       } catch {
-        setDisplayName("Jinbandhan");
-        setSlug("jinbandhan");
-        setBio("Verified Jain Matrimony & Community Profiles");
-        setCurrentPlan("creator");
+        // no-op: protected by dashboard layout
       }
     }
     loadProfile();
