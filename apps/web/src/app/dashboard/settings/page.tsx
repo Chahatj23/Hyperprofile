@@ -11,6 +11,8 @@ export default function SettingsPage() {
   const [slugStatus, setSlugStatus] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const [igAccount, setIgAccount] = useState<{ username: string; igUserId: string } | null>(null);
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
@@ -24,6 +26,11 @@ export default function SettingsPage() {
             setBio(data.creator.bio || "");
             setCurrentPlan(data.creator.plan || "creator");
           }
+          if (data.instagram) {
+            setIgAccount({ username: data.instagram.username, igUserId: data.instagram.igUserId });
+          } else {
+            setIgAccount(null);
+          }
         }
       } catch {
         // no-op: protected by dashboard layout
@@ -31,6 +38,52 @@ export default function SettingsPage() {
     }
     loadProfile();
   }, []);
+
+  async function handleLinkAccount(username: string) {
+    setLinking(true);
+    setMsg("");
+    try {
+      const res = await fetch("/v1/ig/accounts/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username }),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        setIgAccount({ username: j.account.username, igUserId: j.account.igUserId });
+        setMsg(`Instagram @${j.account.username} connected to your workspace successfully ✓`);
+      } else {
+        const err = await res.json();
+        setMsg(err.message || "Could not link Instagram account");
+      }
+    } catch {
+      setMsg("Error connecting account");
+    } finally {
+      setLinking(false);
+      setTimeout(() => setMsg(""), 4000);
+    }
+  }
+
+  async function handleUnlinkAccount() {
+    setLinking(true);
+    setMsg("");
+    try {
+      const res = await fetch("/v1/ig/accounts/unlink", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setIgAccount(null);
+        setMsg("Instagram account unlinked from workspace ✓");
+      }
+    } catch {
+      setMsg("Could not unlink account");
+    } finally {
+      setLinking(false);
+      setTimeout(() => setMsg(""), 4000);
+    }
+  }
 
   async function checkSlug(s: string) {
     setSlug(s);
@@ -203,6 +256,186 @@ export default function SettingsPage() {
           <span>{msg}</span>
         </div>
       )}
+
+      {/* Connected Instagram Accounts Section */}
+      <div
+        style={{
+          background: "#ffffff",
+          borderRadius: "16px",
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "20px 24px",
+            borderBottom: "1px solid #f1f5f9",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <h2 style={{ fontSize: "1.15rem", fontWeight: 700, color: "#0f172a", margin: "0 0 2px" }}>
+              Connected Instagram Accounts
+            </h2>
+            <p style={{ margin: 0, fontSize: "0.82rem", color: "#64748b" }}>
+              Connect and manage Instagram Professional accounts powering AutoDM keyword replies and profile analytics.
+            </p>
+          </div>
+
+          <span
+            style={{
+              padding: "4px 10px",
+              borderRadius: "20px",
+              background: igAccount ? "#ecfdf5" : "#fef3c7",
+              color: igAccount ? "#059669" : "#d97706",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+            }}
+          >
+            {igAccount ? "● Account Active" : "No Account Linked"}
+          </span>
+        </div>
+
+        <div style={{ padding: "24px" }}>
+          {igAccount ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "16px",
+                padding: "18px 20px",
+                borderRadius: "14px",
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                <div
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#ffffff",
+                    fontWeight: 800,
+                    fontSize: "1.1rem",
+                  }}
+                >
+                  IG
+                </div>
+                <div>
+                  <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "#0f172a" }}>
+                    @{igAccount.username}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "2px" }}>
+                    Instagram Business ID: <code>{igAccount.igUserId}</code> · Meta Graph v21.0
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <a
+                  href={`https://www.instagram.com/${igAccount.username}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "9px",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    color: "#334155",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  View on Instagram ↗
+                </a>
+
+                <button
+                  type="button"
+                  disabled={linking}
+                  onClick={handleUnlinkAccount}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "9px",
+                    background: "rgba(239, 68, 68, 0.08)",
+                    border: "1px solid rgba(239, 68, 68, 0.25)",
+                    color: "#dc2626",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: linking ? "wait" : "pointer",
+                  }}
+                >
+                  {linking ? "Unlinking…" : "Unlink Account"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "28px 16px",
+                background: "#f8fafc",
+                borderRadius: "14px",
+                border: "1px dashed #cbd5e1",
+              }}
+            >
+              <div style={{ fontSize: "2rem", marginBottom: "8px" }}>📸</div>
+              <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a", margin: "0 0 6px" }}>
+                No Instagram Account Connected
+              </h3>
+              <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "0 0 18px", maxWidth: "420px", marginLeft: "auto", marginRight: "auto" }}>
+                Link your Instagram Professional account to activate AutoDM keyword triggers and live audience analytics.
+              </p>
+
+              <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  disabled={linking}
+                  onClick={() => handleLinkAccount("jinbandhan")}
+                  style={{
+                    padding: "10px 18px",
+                    borderRadius: "10px",
+                    background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+                    color: "#ffffff",
+                    border: "none",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    cursor: linking ? "wait" : "pointer",
+                    boxShadow: "0 2px 8px rgba(220, 39, 67, 0.3)",
+                  }}
+                >
+                  {linking ? "Linking…" : "Link Verified @jinbandhan Account →"}
+                </button>
+
+                <Link
+                  href="/connect"
+                  style={{
+                    padding: "10px 18px",
+                    borderRadius: "10px",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    color: "#0f172a",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  Connect Other Account (Meta OAuth) ↗
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Profile Information Section */}
       <div

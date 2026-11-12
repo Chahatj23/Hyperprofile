@@ -11,12 +11,13 @@ function ConnectInner() {
   const error = params.get("error");
 
   const [connectedAccount, setConnectedAccount] = useState<string | null>(username || null);
+  const [currentUser, setCurrentUser] = useState<{ email?: string; slug?: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function launchWorkspace(dest: string) {
     if (connectedAccount) {
       try {
-        await fetch("/v1/auth/instagram/session", {
+        await fetch("/v1/ig/accounts/connect", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -28,7 +29,17 @@ function ConnectInner() {
   }
 
   useEffect(() => {
-    async function checkCurrentAccounts() {
+    async function checkAuthAndAccounts() {
+      try {
+        const authRes = await fetch("/v1/auth/me", { credentials: "include" });
+        if (authRes.ok) {
+          const authData = await authRes.json();
+          if (authData?.user) {
+            setCurrentUser(authData.user);
+          }
+        }
+      } catch {}
+
       try {
         const res = await fetch("/v1/ig/accounts");
         if (res.ok) {
@@ -43,7 +54,7 @@ function ConnectInner() {
         setLoading(false);
       }
     }
-    checkCurrentAccounts();
+    checkAuthAndAccounts();
   }, []);
 
   return (

@@ -9,7 +9,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [appsOpen, setAppsOpen] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [creatorUser, setCreatorUser] = useState<{ displayName: string; slug: string; username?: string } | null>(null);
+  const [creatorUser, setCreatorUser] = useState<{ displayName: string; slug: string; username?: string; email?: string } | null>(null);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
@@ -24,7 +24,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             setCreatorUser({
               displayName: data.creator.displayName || "Creator",
               slug: data.creator.slug || "",
-              username: data.ig?.username || data.creator.slug || "",
+              username: data.instagram?.username || data.ig?.username || "",
+              email: data.user?.email || "",
             });
             return;
           }
@@ -190,8 +191,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           ) : null}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {detectedAccount ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <Link
+              href="/login"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                padding: "13px 20px",
+                borderRadius: "12px",
+                background: "linear-gradient(135deg, #0284c7 0%, #0066fe 100%)",
+                color: "#ffffff",
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                textDecoration: "none",
+                boxShadow: "0 4px 14px rgba(0, 102, 254, 0.35)",
+              }}
+            >
+              <span>🔑</span>
+              <span>Sign In with Email &amp; Password →</span>
+            </Link>
+
+            <Link
+              href="/login?mode=register"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                padding: "12px 20px",
+                borderRadius: "12px",
+                background: "#f8fafc",
+                color: "#0f172a",
+                border: "1px solid #e2e8f0",
+                fontSize: "0.9rem",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              <span>✦</span>
+              <span>Create Free Creator Account</span>
+            </Link>
+
+            {detectedAccount && (
               <button
                 type="button"
                 disabled={loggingIn}
@@ -220,41 +263,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "10px",
-                  padding: "13px 20px",
+                  padding: "11px 20px",
                   borderRadius: "12px",
                   background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
                   color: "#ffffff",
-                  fontSize: "0.95rem",
+                  fontSize: "0.88rem",
                   fontWeight: 700,
                   border: "none",
                   cursor: loggingIn ? "wait" : "pointer",
-                  boxShadow: "0 4px 14px rgba(220, 39, 67, 0.3)",
+                  boxShadow: "0 3px 10px rgba(220, 39, 67, 0.25)",
                 }}
               >
                 <span>📸</span>
-                <span>{loggingIn ? "Signing In…" : `Sign In as @${detectedAccount} →`}</span>
+                <span>{loggingIn ? "Signing In…" : `Quick Access as @${detectedAccount} →`}</span>
               </button>
-            ) : (
-              <Link
-                href="/connect"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "10px",
-                  padding: "13px 20px",
-                  borderRadius: "12px",
-                  background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-                  color: "#ffffff",
-                  fontSize: "0.95rem",
-                  fontWeight: 700,
-                  textDecoration: "none",
-                  boxShadow: "0 4px 14px rgba(220, 39, 67, 0.3)",
-                }}
-              >
-                <span>📸</span>
-                <span>Connect Instagram Account</span>
-              </Link>
             )}
 
             {detectedAccount && (
@@ -264,11 +286,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  padding: "11px 20px",
+                  padding: "10px 20px",
                   borderRadius: "12px",
                   background: "#eff6ff",
                   color: "#1d4ed8",
-                  fontSize: "0.9rem",
+                  fontSize: "0.85rem",
                   fontWeight: 600,
                   textDecoration: "none",
                 }}
@@ -276,24 +298,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 View Public Store (hyperprofile.bio/{detectedAccount}) ↗
               </Link>
             )}
-
-            <Link
-              href="/connect"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "11px 20px",
-                borderRadius: "12px",
-                background: "#f1f5f9",
-                color: "#475569",
-                fontSize: "0.88rem",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              Account Connection Settings
-            </Link>
 
             <Link
               href="/"
@@ -493,8 +497,55 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        {/* Bottom Section: User Profile */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {/* Bottom Section: User Profile & Connected Account */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {/* Connected Instagram Account Status */}
+          {creatorUser?.username ? (
+            <Link
+              href="/dashboard/settings"
+              style={{
+                padding: "8px 12px",
+                borderRadius: "10px",
+                background: "rgba(16, 185, 129, 0.08)",
+                border: "1px solid rgba(16, 185, 129, 0.2)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                textDecoration: "none",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981" }} />
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#34d399" }}>
+                  @{creatorUser.username}
+                </span>
+              </div>
+              <span style={{ fontSize: "0.7rem", color: "#6ee7b7", background: "rgba(16,185,129,0.2)", padding: "2px 6px", borderRadius: "4px" }}>
+                Active
+              </span>
+            </Link>
+          ) : (
+            <Link
+              href="/connect"
+              style={{
+                padding: "8px 12px",
+                borderRadius: "10px",
+                background: "rgba(245, 158, 11, 0.08)",
+                border: "1px solid rgba(245, 158, 11, 0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                textDecoration: "none",
+                color: "#fbbf24",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+              }}
+            >
+              <span>📸 Connect Instagram</span>
+              <span>➕</span>
+            </Link>
+          )}
+
           {/* Connected User Profile Card */}
           <Link
             href="/dashboard/settings"
@@ -516,7 +567,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   width: "32px",
                   height: "32px",
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg, #f09433 0%, #bc1888 100%)",
+                  background: "linear-gradient(135deg, #0284c7 0%, #0066fe 100%)",
                   padding: "1.5px",
                   display: "grid",
                   placeItems: "center",
@@ -539,18 +590,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#f8fafc", lineHeight: 1.2 }}>
+              <div style={{ display: "flex", flexDirection: "column", maxWidth: "140px", overflow: "hidden" }}>
+                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#f8fafc", lineHeight: 1.2, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
                   {creatorUser?.displayName || "Creator"}
                 </span>
-                <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                  @{creatorUser?.username || creatorUser?.slug || "creator"}
+                <span style={{ fontSize: "0.7rem", color: "#64748b", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                  {creatorUser?.email || `@${creatorUser?.slug || "creator"}`}
                 </span>
               </div>
             </div>
 
             <span style={{ color: "#64748b", fontSize: "0.8rem" }}>⚙</span>
           </Link>
+
+          {/* Log Out Button */}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await fetch("/v1/auth/logout", { method: "POST" });
+              } catch {}
+              window.location.href = "/login";
+            }}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              borderRadius: "10px",
+              background: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              color: "#f87171",
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+            }}
+          >
+            <span>🚪</span>
+            <span>Log Out</span>
+          </button>
         </div>
       </aside>
 

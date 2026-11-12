@@ -130,10 +130,24 @@ export default function HomePage() {
                 transition: "background 0.15s ease",
               }}
             >
-              Sample Store ↗
+              Live Demo ↗
             </Link>
             <Link
-              href="/dashboard/autodm"
+              href="/login"
+              style={{
+                padding: "8px 16px",
+                borderRadius: "10px",
+                color: "#ffffff",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                fontSize: "0.88rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              Log In
+            </Link>
+            <Link
+              href="/login?mode=register"
               style={{
                 padding: "9px 20px",
                 borderRadius: "10px",
@@ -146,7 +160,7 @@ export default function HomePage() {
                 transition: "background 0.15s ease",
               }}
             >
-              Open Dashboard ✨
+              Get Started Free →
             </Link>
           </div>
         </div>
