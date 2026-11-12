@@ -10,6 +10,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [creatorUser, setCreatorUser] = useState<{ displayName: string; slug: string; username?: string } | null>(null);
+  const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -34,7 +36,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setAuthLoading(false);
       }
     }
+
+    async function checkAccount() {
+      try {
+        const res = await fetch("/v1/ig/accounts");
+        if (res.ok) {
+          const j = await res.json();
+          if (j?.data?.[0]?.username) {
+            setDetectedAccount(j.data[0].username);
+          }
+        }
+      } catch {}
+    }
+
     checkAuth();
+    checkAccount();
   }, [pathname]);
 
   const mainNav = [
@@ -154,30 +170,115 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             This dashboard contains private creator tools, audience leads, and AutoDM rules. Please sign in with your Instagram account to access your workspace.
           </p>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <Link
-              href="/connect"
+          {detectedAccount ? (
+            <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "10px",
-                padding: "13px 20px",
-                borderRadius: "12px",
-                background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-                color: "#ffffff",
-                fontSize: "0.95rem",
-                fontWeight: 700,
-                textDecoration: "none",
-                boxShadow: "0 4px 14px rgba(220, 39, 67, 0.3)",
+                marginBottom: "20px",
+                padding: "16px",
+                borderRadius: "14px",
+                background: "rgba(2, 132, 199, 0.06)",
+                border: "1px solid rgba(2, 132, 199, 0.18)",
               }}
             >
-              <span>📸</span>
-              <span>Sign In with Instagram</span>
-            </Link>
+              <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "6px" }}>
+                Connected Instagram Account
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontSize: "1.1rem", fontWeight: 700, color: "#0f172a" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
+                @{detectedAccount}
+              </div>
+            </div>
+          ) : null}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {detectedAccount ? (
+              <button
+                type="button"
+                disabled={loggingIn}
+                onClick={async () => {
+                  setLoggingIn(true);
+                  try {
+                    const res = await fetch("/v1/auth/instagram/session", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({ username: detectedAccount }),
+                    });
+                    if (res.ok) {
+                      window.location.reload();
+                      return;
+                    }
+                  } catch {
+                    // ignore
+                  } finally {
+                    setLoggingIn(false);
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  padding: "13px 20px",
+                  borderRadius: "12px",
+                  background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+                  color: "#ffffff",
+                  fontSize: "0.95rem",
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: loggingIn ? "wait" : "pointer",
+                  boxShadow: "0 4px 14px rgba(220, 39, 67, 0.3)",
+                }}
+              >
+                <span>📸</span>
+                <span>{loggingIn ? "Signing In…" : `Sign In as @${detectedAccount} →`}</span>
+              </button>
+            ) : (
+              <Link
+                href="/connect"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  padding: "13px 20px",
+                  borderRadius: "12px",
+                  background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+                  color: "#ffffff",
+                  fontSize: "0.95rem",
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  boxShadow: "0 4px 14px rgba(220, 39, 67, 0.3)",
+                }}
+              >
+                <span>📸</span>
+                <span>Connect Instagram Account</span>
+              </Link>
+            )}
+
+            {detectedAccount && (
+              <Link
+                href={`/${detectedAccount}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "11px 20px",
+                  borderRadius: "12px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                View Public Store (hyperprofile.bio/{detectedAccount}) ↗
+              </Link>
+            )}
 
             <Link
-              href="/"
+              href="/connect"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -186,7 +287,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 borderRadius: "12px",
                 background: "#f1f5f9",
                 color: "#475569",
-                fontSize: "0.9rem",
+                fontSize: "0.88rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              Account Connection Settings
+            </Link>
+
+            <Link
+              href="/"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "10px 20px",
+                borderRadius: "12px",
+                background: "transparent",
+                color: "#64748b",
+                fontSize: "0.85rem",
                 fontWeight: 600,
                 textDecoration: "none",
               }}

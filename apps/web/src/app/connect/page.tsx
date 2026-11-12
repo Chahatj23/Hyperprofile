@@ -13,6 +13,20 @@ function ConnectInner() {
   const [connectedAccount, setConnectedAccount] = useState<string | null>(username || null);
   const [loading, setLoading] = useState(true);
 
+  async function launchWorkspace(dest: string) {
+    if (connectedAccount) {
+      try {
+        await fetch("/v1/auth/instagram/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ username: connectedAccount }),
+        });
+      } catch {}
+    }
+    window.location.href = dest;
+  }
+
   useEffect(() => {
     async function checkCurrentAccounts() {
       try {
@@ -96,8 +110,9 @@ function ConnectInner() {
               </div>
 
               <div style={{ borderTop: "1px solid var(--line)", paddingTop: "14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <Link
-                  href="/dashboard/autodm"
+                <button
+                  type="button"
+                  onClick={() => launchWorkspace("/dashboard/autodm")}
                   style={{
                     padding: "10px 16px",
                     borderRadius: "8px",
@@ -105,14 +120,16 @@ function ConnectInner() {
                     color: "#0f1a14",
                     fontWeight: 700,
                     fontSize: "0.85rem",
-                    textDecoration: "none",
+                    border: "none",
+                    cursor: "pointer",
                     textAlign: "center",
                   }}
                 >
                   ⚡ AutoDM Rules &rarr;
-                </Link>
-                <Link
-                  href="/dashboard/insights"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => launchWorkspace("/dashboard/insights")}
                   style={{
                     padding: "10px 16px",
                     borderRadius: "8px",
@@ -120,13 +137,13 @@ function ConnectInner() {
                     color: "var(--ink)",
                     fontWeight: 600,
                     fontSize: "0.85rem",
-                    textDecoration: "none",
-                    textAlign: "center",
                     border: "1px solid var(--line)",
+                    cursor: "pointer",
+                    textAlign: "center",
                   }}
                 >
                   📸 Live Insights &rarr;
-                </Link>
+                </button>
               </div>
             </div>
           </div>

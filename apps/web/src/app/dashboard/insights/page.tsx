@@ -381,6 +381,7 @@ export default function DashboardInsightsPage() {
                   <img
                     src={data.media[0].mediaUrl || data.media[0].thumbnailUrl || ""}
                     alt="post"
+                    referrerPolicy="no-referrer"
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                   <span style={{ position: "absolute", bottom: "4px", right: "4px", fontSize: "0.7rem", background: "rgba(0,0,0,0.6)", padding: "2px 4px", borderRadius: "4px", color: "#fff" }}>
@@ -440,10 +441,11 @@ export default function DashboardInsightsPage() {
                   <img
                     src={m.mediaUrl || m.thumbnailUrl || ""}
                     alt="media"
+                    referrerPolicy="no-referrer"
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                   <span style={{ position: "absolute", top: "8px", right: "8px", background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: "0.7rem", padding: "2px 6px", borderRadius: "6px" }}>
-                    ID: {m.id}
+                    {m.mediaType === "VIDEO" ? "🎬 Reel" : "📸 Post"}
                   </span>
                 </div>
 
@@ -457,20 +459,40 @@ export default function DashboardInsightsPage() {
                       ❤️ {m.likeCount ?? 0} · 💬 {m.commentsCount ?? 0}
                     </div>
 
-                    <Link
-                      href={`/dashboard/autodm?mediaId=${m.id}`}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "8px",
-                        background: "#eff6ff",
-                        color: "#1d4ed8",
-                        fontSize: "0.78rem",
-                        fontWeight: 600,
-                        textDecoration: "none",
-                      }}
-                    >
-                      Automate Post ⚡
-                    </Link>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      {m.permalink && (
+                        <a
+                          href={m.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: "8px",
+                            background: "#f1f5f9",
+                            color: "#475569",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            textDecoration: "none",
+                          }}
+                        >
+                          IG ↗
+                        </a>
+                      )}
+                      <Link
+                        href={`/dashboard/autodm?mediaId=${m.id}`}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: "8px",
+                          background: "#eff6ff",
+                          color: "#1d4ed8",
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                          textDecoration: "none",
+                        }}
+                      >
+                        AutoDM ⚡
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -160,6 +160,79 @@ export function registerAuthRoutes(
     };
   });
 
+  // 1-Click Session authentication for connected Instagram creator accounts
+  app.post("/v1/auth/instagram/session", async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = (req.body ?? {}) as { username?: string; igUserId?: string };
+
+    let ig = body.igUserId
+      ? (await db.select().from(igAccounts).where(eq(igAccounts.igUserId, body.igUserId)).limit(1))[0]
+      : body.username
+        ? (await db.select().from(igAccounts).where(eq(igAccounts.username, body.username.toLowerCase())).limit(1))[0]
+        : (await db.select().from(igAccounts).limit(1))[0];
+
+    if (!ig) {
+      return reply.code(404).send({ code: "not_found", message: "No connected Instagram account found" });
+    }
+
+    // Find or create associated creator
+    let creator = ig.creatorId
+      ? (await db.select().from(creators).where(eq(creators.id, ig.creatorId)).limit(1))[0]
+      : (await db.select().from(creators).where(eq(creators.slug, ig.username.toLowerCase())).limit(1))[0];
+
+    if (!creator) {
+      const email = `${ig.username.toLowerCase()}@hyperprofile.internal`;
+      let user = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
+      if (!user) {
+        const u = await db.insert(users).values({ email, role: "creator" }).returning();
+        user = u[0]!;
+      }
+      const inserted = await db
+        .insert(creators)
+        .values({
+          userId: user.id,
+          slug: ig.username.toLowerCase(),
+          displayName: ig.username.charAt(0).toUpperCase() + ig.username.slice(1),
+          bio: "Verified Instagram Creator",
+          plan: "creator",
+        })
+        .returning();
+      creator = inserted[0]!;
+      await db.update(igAccounts).set({ creatorId: creator.id }).where(eq(igAccounts.id, ig.id));
+    }
+
+    let user = creator.userId
+      ? (await db.select().from(users).where(eq(users.id, creator.userId)).limit(1))[0]
+      : null;
+
+    if (!user) {
+      const email = `${creator.slug}@hyperprofile.internal`;
+      let u = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
+      if (!u) {
+        const inserted = await db.insert(users).values({ email, role: "creator" }).returning();
+        u = inserted[0]!;
+      }
+      user = u;
+    }
+
+    const token = signSession(
+      {
+        userId: user.id,
+        email: user.email,
+        creatorId: creator.id,
+        slug: creator.slug,
+      },
+      sessionSecret,
+    );
+
+    setSessionCookie(reply, token, isSecureCookie);
+
+    return {
+      success: true,
+      creator: { id: creator.id, slug: creator.slug, displayName: creator.displayName, plan: creator.plan },
+      instagram: { username: ig.username, igUserId: ig.igUserId },
+    };
+  });
+
   // Logout
   app.post("/v1/auth/logout", async (_req: FastifyRequest, reply: FastifyReply) => {
     clearSessionCookie(reply);

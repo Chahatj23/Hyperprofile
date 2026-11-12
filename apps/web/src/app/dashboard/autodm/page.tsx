@@ -1049,7 +1049,8 @@ export default function AutoDmPage() {
                               {matchedMedia?.mediaUrl || matchedMedia?.thumbnailUrl || mediaList[0]?.mediaUrl ? (
                                 <img
                                   src={matchedMedia?.mediaUrl || matchedMedia?.thumbnailUrl || mediaList[0]?.mediaUrl || ""}
-                                  alt="reel"
+                                  alt="post"
+                                  referrerPolicy="no-referrer"
                                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                 />
                               ) : (
@@ -1251,6 +1252,7 @@ export default function AutoDmPage() {
                     <img
                       src={activities[0].mediaThumbnail || mediaList[0]?.mediaUrl || mediaList[0]?.thumbnailUrl || ""}
                       alt="cover"
+                      referrerPolicy="no-referrer"
                       style={{ width: "22px", height: "22px", borderRadius: "4px", objectFit: "cover" }}
                     />
                   )}
@@ -1432,6 +1434,7 @@ export default function AutoDmPage() {
                           <img
                             src={coverPhoto}
                             alt="post cover"
+                            referrerPolicy="no-referrer"
                             style={{
                               width: "100%",
                               height: "100%",
@@ -2059,15 +2062,25 @@ export default function AutoDmPage() {
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                         <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                          Select from your reels:
+                          Select from your Instagram posts &amp; reels:
                         </span>
                         <button
                           type="button"
                           onClick={async () => {
                             try {
-                              const res = await fetch("/v1/ig/reels?limit=25");
+                              const res = await fetch("/v1/ig/media?limit=30");
                               if (res.ok) {
                                 const json = await res.json();
+                                const items = json?.media || json?.reels || [];
+                                if (Array.isArray(items) && items.length > 0) {
+                                  setMediaList(items);
+                                  setSelectedMediaId(items[0].id);
+                                  return;
+                                }
+                              }
+                              const fallbackRes = await fetch("/v1/ig/reels?limit=25");
+                              if (fallbackRes.ok) {
+                                const json = await fallbackRes.json();
                                 if (Array.isArray(json?.reels) && json.reels.length > 0) {
                                   setMediaList(json.reels);
                                   setSelectedMediaId(json.reels[0].id);
@@ -2084,7 +2097,7 @@ export default function AutoDmPage() {
                             cursor: "pointer",
                           }}
                         >
-                          ↻ Sync Reels
+                          ↻ Sync Posts &amp; Reels
                         </button>
                       </div>
 
@@ -2092,10 +2105,10 @@ export default function AutoDmPage() {
                         <div style={{ padding: "36px 16px", textAlign: "center", background: "#f9fafb", borderRadius: "12px", border: "1px dashed #e5e7eb" }}>
                           <div style={{ fontSize: "1.8rem", marginBottom: "8px" }}>🎬</div>
                           <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "#111827", marginBottom: "4px" }}>
-                            No reels retrieved yet for @{igAccount.username}
+                            No posts or reels retrieved yet for @{igAccount.username}
                           </div>
                           <div style={{ fontSize: "0.82rem", color: "#6b7280", maxWidth: "360px", margin: "0 auto 16px", lineHeight: 1.4 }}>
-                            You can choose &quot;Any Post/Reel&quot; or &quot;Next Post/Reel&quot; above, or publish a reel on your Instagram profile.
+                            You can choose &quot;Any Post/Reel&quot; or &quot;Next Post/Reel&quot; above, or publish a post on your Instagram profile.
                           </div>
                           <button
                             type="button"
@@ -2127,6 +2140,7 @@ export default function AutoDmPage() {
                         >
                             {mediaList.map((m) => {
                               const isSelected = selectedMediaId === m.id;
+                              const isReel = m.mediaType === "VIDEO" || m.mediaProductType === "REELS";
                               return (
                                 <div
                                   key={m.id}
@@ -2144,11 +2158,30 @@ export default function AutoDmPage() {
                                     transition: "all 0.15s ease",
                                   }}
                                 >
+                                  {/* Media Type Badge */}
+                                  <div
+                                    style={{
+                                      position: "absolute",
+                                      top: "6px",
+                                      left: "6px",
+                                      zIndex: 2,
+                                      background: "rgba(0,0,0,0.7)",
+                                      color: "#ffffff",
+                                      fontSize: "0.62rem",
+                                      fontWeight: 700,
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                    }}
+                                  >
+                                    {isReel ? "🎬 Reel" : "📸 Post"}
+                                  </div>
+
                                   {/* Thumbnail Image */}
                                   {m.mediaUrl || m.thumbnailUrl ? (
                                     <img
                                       src={m.mediaUrl || m.thumbnailUrl || ""}
-                                      alt="reel"
+                                      alt="post cover"
+                                      referrerPolicy="no-referrer"
                                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                     />
                                   ) : (
@@ -2163,7 +2196,7 @@ export default function AutoDmPage() {
                                         fontSize: "2rem",
                                       }}
                                     >
-                                      🎬
+                                      {isReel ? "🎬" : "📸"}
                                     </div>
                                   )}
 

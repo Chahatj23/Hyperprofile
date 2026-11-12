@@ -170,7 +170,12 @@ const paymentWebhooks = createPaymentWebhookHandlers({
 });
 
 registerAuthRoutes(app, { db, sessionSecret: env.SESSION_SECRET, isSecureCookie: isSecure });
-registerCreatorRoutes(app, { db, sessionSecret: env.SESSION_SECRET });
+registerCreatorRoutes(app, {
+  db,
+  sessionSecret: env.SESSION_SECRET,
+  tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
+  metaGraphVersion: env.META_GRAPH_VERSION,
+});
 registerProductsRoutes(app, { db, sessionSecret: env.SESSION_SECRET });
 registerCheckoutRoutes(app, { db, paymentProvider });
 registerLibraryRoutes(app, { db });

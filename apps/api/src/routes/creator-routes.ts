@@ -3,12 +3,15 @@ import { and, eq, ne } from "drizzle-orm";
 import {
   auditLog,
   creators,
+  igAccounts,
   pages,
   products,
   reservedSlugs,
   type Db,
   type PageVersion,
 } from "@hyperprofile/db";
+import { fetchIgReels, type IgMediaItem } from "@hyperprofile/meta";
+import { decryptAesGcm } from "@hyperprofile/shared";
 import { getSession } from "../auth/session.js";
 
 const DEFAULT_BLOCKS: PageVersion = {
@@ -36,9 +39,9 @@ function isValidSlug(slug: string): boolean {
 
 export function registerCreatorRoutes(
   app: FastifyInstance,
-  options: { db: Db; sessionSecret: string },
+  options: { db: Db; sessionSecret: string; tokenEncryptionKey?: string; metaGraphVersion?: string },
 ) {
-  const { db, sessionSecret } = options;
+  const { db, sessionSecret, tokenEncryptionKey, metaGraphVersion } = options;
 
   // Helper to ensure authenticated creator
   async function requireCreator(req: FastifyRequest, reply: FastifyReply) {
@@ -289,6 +292,31 @@ export function registerCreatorRoutes(
       blocks: [],
     };
 
+    // Query connected Instagram account for this creator
+    let ig = (
+      await db.select().from(igAccounts).where(eq(igAccounts.creatorId, creator.id)).limit(1)
+    )[0];
+
+    if (!ig && normalized) {
+      ig = (
+        await db.select().from(igAccounts).where(eq(igAccounts.username, normalized)).limit(1)
+      )[0];
+    }
+
+    let posts: IgMediaItem[] = [];
+    if (ig && tokenEncryptionKey) {
+      try {
+        const accessToken = decryptAesGcm(ig.accessTokenEncrypted, tokenEncryptionKey);
+        posts = await fetchIgReels(ig.igUserId, accessToken, {
+          graphVersion: metaGraphVersion || "v21.0",
+          mediaLimit: 12,
+        });
+      } catch {
+        // gracefully fall back to empty list on network or Meta Graph error
+        posts = [];
+      }
+    }
+
     return {
       creator: {
         id: creator.id,
@@ -301,6 +329,13 @@ export function registerCreatorRoutes(
       page: published,
       products: activeProducts,
       isPublished: !!pageRow?.isPublished,
+      instagram: ig
+        ? {
+            username: ig.username,
+            igUserId: ig.igUserId,
+          }
+        : null,
+      posts,
     };
   });
 }
