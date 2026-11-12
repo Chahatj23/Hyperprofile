@@ -32,6 +32,9 @@ importers:
       '@hyperprofile/meta':
         specifier: workspace:*
         version: link:../../packages/meta
+      '@hyperprofile/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@hyperprofile/shared':
         specifier: workspace:*
         version: link:../../packages/shared
