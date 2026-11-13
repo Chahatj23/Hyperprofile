@@ -24,8 +24,6 @@ function resolveActivityFile(): string {
   if (fs.existsSync(p2)) return p2;
   const p3 = path.resolve(process.cwd(), "..", "..", "real-ig-activity.json");
   if (fs.existsSync(p3)) return p3;
-  const directE = path.resolve("e:/Full Stack/real-ig-activity.json");
-  if (fs.existsSync(directE)) return directE;
   return p1;
 }
 
@@ -46,16 +44,6 @@ export function saveStoredActivities(activities: ActivityItem[]): void {
   try {
     const file = resolveActivityFile();
     fs.writeFileSync(file, JSON.stringify(activities.slice(0, 200), null, 2), "utf8");
-
-    // Also mirror to root if in api subdir, or vice versa
-    const workspaceRoot = path.resolve("e:/Full Stack/real-ig-activity.json");
-    if (workspaceRoot !== file) {
-      try {
-        fs.writeFileSync(workspaceRoot, JSON.stringify(activities.slice(0, 200), null, 2), "utf8");
-      } catch {
-        // ignore
-      }
-    }
   } catch (err) {
     logger.warn("failed to save activity file", { err: String(err) });
   }

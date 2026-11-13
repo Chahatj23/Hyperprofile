@@ -21,8 +21,6 @@ function resolveRulesFile(): string {
   if (fs.existsSync(workspaceRoot)) return workspaceRoot;
   const apiSubdir = path.resolve(process.cwd(), "apps", "api", "real-ig-rules.json");
   if (fs.existsSync(apiSubdir)) return apiSubdir;
-  const directE = path.resolve("e:/Full Stack/real-ig-rules.json");
-  if (fs.existsSync(directE)) return directE;
   return local;
 }
 
@@ -42,14 +40,6 @@ function saveDiskRules(rules: Array<any>): void {
   try {
     const file = resolveRulesFile();
     fs.writeFileSync(file, JSON.stringify(rules, null, 2), "utf8");
-    const directE = path.resolve("e:/Full Stack/real-ig-rules.json");
-    if (directE !== file) {
-      try {
-        fs.writeFileSync(directE, JSON.stringify(rules, null, 2), "utf8");
-      } catch {
-        // ignore
-      }
-    }
   } catch {
     // ignore
   }
@@ -111,28 +101,21 @@ export async function processCommentWebhook(
 
     let plan = "free";
     try {
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("db_timeout")), 80));
       const igAccount = (
-        await Promise.race([
-          db
-            .select({ creatorId: igAccounts.creatorId })
-            .from(igAccounts)
-            .where(eq(igAccounts.igUserId, igUserId))
-            .limit(1),
-          timeout,
-        ])
+        await db
+          .select({ creatorId: igAccounts.creatorId })
+          .from(igAccounts)
+          .where(eq(igAccounts.igUserId, igUserId))
+          .limit(1)
       )[0];
 
       if (igAccount?.creatorId) {
         const creator = (
-          await Promise.race([
-            db
-              .select({ plan: creators.plan })
-              .from(creators)
-              .where(eq(creators.id, igAccount.creatorId))
-              .limit(1),
-            timeout,
-          ])
+          await db
+            .select({ plan: creators.plan })
+            .from(creators)
+            .where(eq(creators.id, igAccount.creatorId))
+            .limit(1)
         )[0];
         if (creator?.plan) plan = creator.plan;
       }
@@ -140,25 +123,27 @@ export async function processCommentWebhook(
       // safe fallback to free plan
     }
 
-    // 1. Instant disk rules resolution (< 0.1ms)
-    let rules: Array<any> = loadDiskRules().filter(
-      (r: any) => (!r.igUserId || r.igUserId === igUserId) && r.active,
-    );
-
-    // 2. Race DB if disk rules empty
-    if (rules.length === 0) {
-      try {
-        const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("db_timeout")), 80));
-        rules = await Promise.race([
-          db
-            .select()
-            .from(automationRules)
-            .where(and(eq(automationRules.igUserId, igUserId), eq(automationRules.active, true))),
-          timeout,
-        ]);
-      } catch {
-        // fallback
+    // 1. Fetch DB rules first (cloud truth on Render)
+    let rules: Array<any> = [];
+    try {
+      const dbRules = await db
+        .select()
+        .from(automationRules)
+        .where(and(eq(automationRules.igUserId, igUserId), eq(automationRules.active, true)));
+      if (dbRules && dbRules.length > 0) {
+        rules = dbRules;
       }
+    } catch (err) {
+      logger.warn("processCommentWebhook db rules query fallback", {
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // 2. Fall back to disk rules if DB returned empty
+    if (rules.length === 0) {
+      rules = loadDiskRules().filter(
+        (r: any) => (!r.igUserId || r.igUserId === igUserId) && r.active,
+      );
     }
 
     // If no active rules are configured for this account, skip processing

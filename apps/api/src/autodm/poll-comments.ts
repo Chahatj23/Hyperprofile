@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { type Db } from "@hyperprofile/db";
+import { eq } from "drizzle-orm";
+import { automationRules, igAccounts, type Db } from "@hyperprofile/db";
 import { decryptAesGcm, logger } from "@hyperprofile/shared";
 import { isCommentClaimed } from "./claim.js";
 import { processCommentWebhook } from "./process-comments.js";
@@ -12,8 +13,6 @@ function resolveAccountFile(): string {
   if (fs.existsSync(p2)) return p2;
   const p3 = path.resolve(process.cwd(), "..", "..", "real-ig-account.json");
   if (fs.existsSync(p3)) return p3;
-  const directE = path.resolve("e:/Full Stack/real-ig-account.json");
-  if (fs.existsSync(directE)) return directE;
   return p1;
 }
 
@@ -24,8 +23,6 @@ function resolveRulesFile(): string {
   if (fs.existsSync(workspaceRoot)) return workspaceRoot;
   const apiSubdir = path.resolve(process.cwd(), "apps", "api", "real-ig-rules.json");
   if (fs.existsSync(apiSubdir)) return apiSubdir;
-  const directE = path.resolve("e:/Full Stack/real-ig-rules.json");
-  if (fs.existsSync(directE)) return directE;
   return local;
 }
 
@@ -49,7 +46,7 @@ type PollerStats = {
 
 const stats: PollerStats = {
   enabled: true,
-  intervalMs: 20000,
+  intervalMs: 15000,
   lastPollAt: null,
   lastCommentsChecked: 0,
   totalMissedCommentsRecovered: 0,
@@ -71,28 +68,54 @@ export async function pollActiveCommentsOnce(cfg: CommentPollerConfig): Promise<
   let checked = 0;
   let recovered = 0;
 
-  // 1. Resolve Access Token
+  // 1. Resolve Access Token directly from DB first (production cloud source of truth)
   let accessToken: string | null = null;
   let defaultIgUserId = "17841453478293915";
 
   try {
-    const acctPath = resolveAccountFile();
-    if (fs.existsSync(acctPath)) {
-      const acct = JSON.parse(fs.readFileSync(acctPath, "utf8"));
-      if (acct?.accessTokenEncrypted) {
-        accessToken = decryptAesGcm(acct.accessTokenEncrypted, cfg.tokenEncryptionKey);
+    const acctRows = await cfg.db
+      .select()
+      .from(igAccounts)
+      .limit(5);
+
+    for (const acct of acctRows) {
+      if (acct?.accessTokenEncrypted && !acct.reauthRequiredAt) {
+        try {
+          accessToken = decryptAesGcm(acct.accessTokenEncrypted, cfg.tokenEncryptionKey);
+          defaultIgUserId = acct.igUserId;
+          break;
+        } catch {
+          // continue
+        }
       }
-      if (acct?.igUserId) defaultIgUserId = acct.igUserId;
-    } else if (process.env.IG_ACCOUNT_DATA) {
-      const acct = JSON.parse(process.env.IG_ACCOUNT_DATA);
-      if (acct?.accessTokenEncrypted) {
-        accessToken = decryptAesGcm(acct.accessTokenEncrypted, cfg.tokenEncryptionKey);
-      }
-      if (acct?.igUserId) defaultIgUserId = acct.igUserId;
     }
   } catch (err) {
-    stats.lastError = `Token decrypt failed: ${err instanceof Error ? err.message : String(err)}`;
-    return { checked: 0, recovered: 0 };
+    logger.warn("comment poller db account query warning", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Fallback to disk / env if DB did not provide token
+  if (!accessToken) {
+    try {
+      const acctPath = resolveAccountFile();
+      if (fs.existsSync(acctPath)) {
+        const acct = JSON.parse(fs.readFileSync(acctPath, "utf8"));
+        if (acct?.accessTokenEncrypted) {
+          accessToken = decryptAesGcm(acct.accessTokenEncrypted, cfg.tokenEncryptionKey);
+        }
+        if (acct?.igUserId) defaultIgUserId = acct.igUserId;
+      } else if (process.env.IG_ACCOUNT_DATA) {
+        const acct = JSON.parse(process.env.IG_ACCOUNT_DATA);
+        if (acct?.accessTokenEncrypted) {
+          accessToken = decryptAesGcm(acct.accessTokenEncrypted, cfg.tokenEncryptionKey);
+        }
+        if (acct?.igUserId) defaultIgUserId = acct.igUserId;
+      }
+    } catch (err) {
+      stats.lastError = `Token decrypt failed: ${err instanceof Error ? err.message : String(err)}`;
+      return { checked: 0, recovered: 0 };
+    }
   }
 
   if (!accessToken) {
@@ -100,36 +123,78 @@ export async function pollActiveCommentsOnce(cfg: CommentPollerConfig): Promise<
     return { checked: 0, recovered: 0 };
   }
 
-  // 2. Resolve Active Rules & Media IDs
+  // 2. Resolve Active Rules directly from DB first
   let rules: Array<any> = [];
   try {
-    const rulesPath = resolveRulesFile();
-    if (fs.existsSync(rulesPath)) {
-      rules = JSON.parse(fs.readFileSync(rulesPath, "utf8")).filter((r: any) => r.active);
+    const dbRules = await cfg.db
+      .select()
+      .from(automationRules)
+      .where(eq(automationRules.active, true));
+
+    if (dbRules && dbRules.length > 0) {
+      rules = dbRules;
     }
-  } catch {
-    // fallback
+  } catch (err) {
+    logger.warn("comment poller db rules query warning", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  if (rules.length === 0) {
+    try {
+      const rulesPath = resolveRulesFile();
+      if (fs.existsSync(rulesPath)) {
+        rules = JSON.parse(fs.readFileSync(rulesPath, "utf8")).filter((r: any) => r.active);
+      }
+    } catch {
+      // fallback
+    }
   }
 
   if (rules.length === 0) {
     stats.monitoredMediaIds = [];
+    stats.lastError = null;
     return { checked: 0, recovered: 0 };
   }
 
+  const graphVersion = cfg.graphVersion || "v21.0";
+
+  // 3. Resolve Media IDs to monitor
   const mediaIds = Array.from(
     new Set(
       rules
-        .map((r: any) => r.mediaId)
+        .map((r: any) => r.mediaId || r.media_id)
         .filter((id): id is string => typeof id === "string" && id.length > 5),
     ),
   );
 
+  // If ANY rule applies to all media (mediaId empty) or if mediaIds list is empty,
+  // query creator's recent media so all active posts/reels are monitored:
+  const hasWildcardMediaRule = rules.some((r: any) => !(r.mediaId || r.media_id));
+  if (hasWildcardMediaRule || mediaIds.length === 0) {
+    try {
+      const recentMediaUrl = `https://graph.facebook.com/${graphVersion}/${defaultIgUserId}/media?fields=id,caption&limit=8&access_token=${encodeURIComponent(accessToken)}`;
+      const res = await fetch(recentMediaUrl);
+      if (res.ok) {
+        const json = (await res.json()) as { data?: Array<{ id: string }> };
+        for (const item of json.data ?? []) {
+          if (item.id && !mediaIds.includes(item.id)) {
+            mediaIds.push(item.id);
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn("failed to fetch recent media for comment poller", {
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   stats.monitoredMediaIds = mediaIds;
   stats.lastPollAt = new Date().toISOString();
+  stats.lastError = null;
 
-  const graphVersion = cfg.graphVersion || "v21.0";
-
-  // 3. Poll comments for each monitored media
+  // 4. Poll comments for each monitored media
   for (const mediaId of mediaIds) {
     try {
       const url = `https://graph.facebook.com/${graphVersion}/${mediaId}/comments?fields=id,text,timestamp,from&limit=25&access_token=${encodeURIComponent(accessToken)}`;

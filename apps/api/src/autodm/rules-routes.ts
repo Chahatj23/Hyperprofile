@@ -147,31 +147,22 @@ export function registerRulesRoutes(
     const q = req.query as { igUserId?: string };
     const igUserId = q.igUserId || getConnectedIgUserId();
 
-    // 1. Instant response from local ground-truth disk store (< 1ms)
-    const disk = loadDiskRules();
-    const filtered = disk.filter((r) => !r.igUserId || r.igUserId === igUserId);
-    if (filtered.length > 0) {
-      return { data: filtered };
-    }
-
-    // 2. If disk has no rules, try quick DB read with a 120ms timeout race
+    // 1. Fetch DB rules first (cloud truth on Render)
     try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("db_timeout")), 120),
-      );
-      const dbQuery = deps.db
+      const dbRules = await deps.db
         .select()
         .from(automationRules)
         .where(eq(automationRules.igUserId, igUserId));
-      const rows = await Promise.race([dbQuery, timeout]);
-      if (rows && rows.length > 0) {
-        saveDiskRules(rows);
-        return { data: rows };
+      if (dbRules && dbRules.length > 0) {
+        return { data: dbRules };
       }
     } catch {
-      // DB offline or timed out
+      // fallback
     }
 
+    // 2. Fallback to disk rules
+    const disk = loadDiskRules();
+    const filtered = disk.filter((r) => !r.igUserId || r.igUserId === igUserId);
     return { data: filtered };
   });
 

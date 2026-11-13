@@ -87,22 +87,20 @@ export function createInstagramWebhookHandlers(deps: InstagramWebhookDeps) {
       const rawText = raw.toString("utf8");
 
       for (const eventId of eventIds) {
-        try {
-          const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("db_timeout")), 80));
-          void Promise.race([
-            deps.db
-              .insert(webhookInbox)
-              .values({
-                provider: "instagram",
-                eventId,
-                rawBody: rawText,
-              })
-              .onConflictDoNothing(),
-            timeout,
-          ]).catch(() => {});
-        } catch {
-          // ignore db offline, proceed to onPayload
-        }
+        deps.db
+          .insert(webhookInbox)
+          .values({
+            provider: "instagram",
+            eventId,
+            rawBody: rawText,
+          })
+          .onConflictDoNothing()
+          .catch((err) => {
+            logger.warn("webhook inbox insert warning", {
+              eventId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
       }
 
       if (deps.onPayload) {

@@ -13,8 +13,6 @@ function resolveAccountFile(): string {
   if (fs.existsSync(p2)) return p2;
   const p3 = path.resolve(process.cwd(), "..", "..", "real-ig-account.json");
   if (fs.existsSync(p3)) return p3;
-  const directE = path.resolve("e:/Full Stack/real-ig-account.json");
-  if (fs.existsSync(directE)) return directE;
   return p1;
 }
 
@@ -80,39 +78,41 @@ async function markEvent(
 async function processJob(cfg: QueueConfig, job: ReplyJob): Promise<"done" | "retry"> {
   let tokenEncrypted: string | null = null;
 
-  // 1. Instant disk account resolution (< 0.1ms)
+  // 1. Fetch from DB first (cloud truth on Render)
   try {
-    const file = resolveAccountFile();
-    if (fs.existsSync(file)) {
-      const saved = JSON.parse(fs.readFileSync(file, "utf8"));
-      if (saved?.accessTokenEncrypted && (saved.igUserId === job.igUserId || !saved.igUserId)) {
-        tokenEncrypted = saved.accessTokenEncrypted;
-      }
-    } else if (process.env.IG_ACCOUNT_DATA) {
-      const saved = JSON.parse(process.env.IG_ACCOUNT_DATA);
-      if (saved?.accessTokenEncrypted && (saved.igUserId === job.igUserId || !saved.igUserId)) {
-        tokenEncrypted = saved.accessTokenEncrypted;
-      }
+    const acct = (
+      await cfg.db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.igUserId, job.igUserId))
+        .limit(1)
+    )[0];
+    if (acct?.accessTokenEncrypted && !acct.reauthRequiredAt) {
+      tokenEncrypted = acct.accessTokenEncrypted;
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    logger.warn("processJob db token query warning", {
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 
-  // 2. Fall back to DB if disk token not found
+  // 2. Fall back to disk account resolution if DB didn't find token
   if (!tokenEncrypted) {
     try {
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("db_timeout")), 80));
-      const acct = (
-        await Promise.race([
-          cfg.db.select().from(igAccounts).where(eq(igAccounts.igUserId, job.igUserId)).limit(1),
-          timeout,
-        ])
-      )[0];
-      if (acct?.accessTokenEncrypted && !acct.reauthRequiredAt) {
-        tokenEncrypted = acct.accessTokenEncrypted;
+      const file = resolveAccountFile();
+      if (fs.existsSync(file)) {
+        const saved = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (saved?.accessTokenEncrypted && (saved.igUserId === job.igUserId || !saved.igUserId)) {
+          tokenEncrypted = saved.accessTokenEncrypted;
+        }
+      } else if (process.env.IG_ACCOUNT_DATA) {
+        const saved = JSON.parse(process.env.IG_ACCOUNT_DATA);
+        if (saved?.accessTokenEncrypted && (saved.igUserId === job.igUserId || !saved.igUserId)) {
+          tokenEncrypted = saved.accessTokenEncrypted;
+        }
       }
     } catch {
-      // db fallback
+      // ignore
     }
   }
 
