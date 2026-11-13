@@ -2,8 +2,8 @@ name: Keep Render Service Awake
 
 on:
   schedule:
-    # Runs every 14 minutes (Render sleeps at 15 minutes)
-    - cron: '*/14 * * * *'
+    # Runs every 10 minutes (valid cron step, prevents 15-min Render spin-down)
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,5 +12,7 @@ jobs:
     steps:
       - name: Ping Health Endpoint
         run: |
-          curl -sS --max-time 15 "https://hyperprofile-api.onrender.com/health" || true
+          echo "Pinging Hyperprofile Render API..."
+          curl -sS --retry 3 --retry-delay 5 --max-time 60 "https://hyperprofile-api.onrender.com/health"
+          echo "API is awake and healthy."
 
