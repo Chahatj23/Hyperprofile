@@ -79,6 +79,17 @@ const db = createDb(env.DATABASE_URL);
 
 const app = Fastify({ logger: false });
 
+/** Security Headers Middleware: Protects against Clickjacking, MIME sniffing, XSS, and Protocol Downgrades */
+app.addHook("onSend", async (_request, reply, payload) => {
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("X-Frame-Options", "DENY");
+  reply.header("X-XSS-Protection", "0");
+  reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  return payload;
+});
+
 /** Global sanitized error handler (prevents leaking credentials / internal stack traces) */
 app.setErrorHandler((error: any, request, reply) => {
   const statusCode = error.statusCode || 500;
@@ -147,7 +158,7 @@ const igWebhooks = createInstagramWebhookHandlers({
   },
 });
 
-registerRulesRoutes(app, { db });
+registerRulesRoutes(app, { db, sessionSecret: env.SESSION_SECRET });
 registerComplianceRoutes(app, {
   db,
   appSecret: env.META_APP_SECRET,
@@ -183,7 +194,7 @@ registerLibraryRoutes(app, { db });
 registerDashboardRoutes(app, { db, sessionSecret: env.SESSION_SECRET, paymentProvider });
 registerComplianceSafetyRoutes(app, { db });
 registerAdminRoutes(app, { db, adminSecret: env.SESSION_SECRET });
-registerCrmRoutes(app, { db });
+registerCrmRoutes(app, { db, sessionSecret: env.SESSION_SECRET });
 
 startTokenRefreshJob({
   db,
@@ -469,11 +480,16 @@ app.get("/api/webhooks/instagram", igWebhooks.verifyGet);
 app.post("/api/webhooks/instagram", igWebhooks.receivePost);
 
 /** Dynamic webhook & active poller information for dashboard status. */
-app.get("/v1/ig/webhook-info", async () => {
+app.get("/v1/ig/webhook-info", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const tunnelUrl = process.env.TUNNEL_URL || "https://telecharger-incoming-icon-filled.trycloudflare.com";
   return {
     webhookUrl: `${tunnelUrl}/webhooks/instagram`,
-    verifyToken: env.META_WEBHOOK_VERIFY_TOKEN,
+    isVerifyTokenConfigured: Boolean(env.META_WEBHOOK_VERIFY_TOKEN),
     connectedAccount: "jinbandhan",
     igUserId: "17841453478293915",
     subscribedFields: ["comments", "messages", "messaging_postbacks"],
@@ -486,10 +502,21 @@ app.get("/v1/ig/webhook-info", async () => {
   };
 });
 
-app.get("/v1/ig/poller-status", async () => getPollerStatus());
+app.get("/v1/ig/poller-status", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+  return getPollerStatus();
+});
 
 /** 1-Click test event to verify end-to-end AutoDM pipeline without manual data entry. */
 app.post("/v1/ig/webhook/test-event", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const body = (req.body ?? {}) as { keyword?: string; username?: string };
   const keyword = body.keyword || "TRIP";
   const commenter = body.username || "jinbandhan_traveller";
@@ -668,7 +695,12 @@ app.get("/v1/ig/accounts/:id/overview", async (req, reply) => {
 });
 
 /** Live overview for the first linked real account. */
-app.get("/v1/ig/overview", async (_req, reply) => {
+app.get("/v1/ig/overview", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   let account: {
     id: string;
     igUserId: string;
@@ -760,6 +792,11 @@ const reelsCache = new Map<string, { data: any[]; timestamp: number }>();
 
 /** Dedicated Instagram Reels list strictly from the connected real account. */
 app.get("/v1/ig/reels", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const query = req.query as { limit?: string };
   const limit = Math.min(Number(query.limit) || 25, 50);
 
@@ -863,6 +900,11 @@ app.get("/v1/ig/reels", async (req, reply) => {
 
 /** All Instagram Media strictly from the connected real account. */
 app.get("/v1/ig/media", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const query = req.query as { limit?: string };
   const limit = Math.min(Number(query.limit) || 30, 60);
 
@@ -937,6 +979,11 @@ app.get("/v1/ig/media", async (req, reply) => {
 
 /** Real activity feed for connected Instagram account with server-side filtering support. */
 app.get("/v1/ig/activity", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const query = req.query as {
     type?: string;
     search?: string;
@@ -1105,6 +1152,11 @@ app.get("/v1/ig/activity", async (req, reply) => {
 
 /** Endpoint to record a live activity item (comments, likes, followers, leads) */
 app.post("/v1/ig/activity", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const body = req.body as Partial<ActivityItem>;
   if (!body.title || !body.type) {
     return reply.code(400).send({ error: "title and type are required" });
@@ -1127,6 +1179,11 @@ app.post("/v1/ig/activity", async (req, reply) => {
 
 /** Real Live AutoDM Execution Endpoint — triggers authentic Meta Graph API private reply & public comment reply. */
 app.post("/v1/ig/autodm/test-send", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const body = req.body as {
     commentId?: string;
     text?: string;
@@ -1230,6 +1287,11 @@ app.post("/v1/ig/autodm/test-send", async (req, reply) => {
 
 /** Test / Simulate Conversational DM State Machine (SuperProfile Ask-to-Follow & Email Capture) */
 app.post("/v1/ig/autodm/test-conversation", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const body = req.body as {
     igUserId?: string;
     buyerIgId?: string;

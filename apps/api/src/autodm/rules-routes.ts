@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { automationRules, igAccounts, type Db } from "@hyperprofile/db";
 import { queueDepth } from "./queue.js";
+import { getSession } from "../auth/session.js";
 
 function resolveAccountFile(): string {
   const local = path.resolve(process.cwd(), "real-ig-account.json");
@@ -85,9 +86,21 @@ const createRuleSchema = z.object({
 
 export function registerRulesRoutes(
   app: FastifyInstance,
-  deps: { db: Db },
+  deps: { db: Db; sessionSecret: string },
 ): void {
-  app.post("/v1/ig/rules", async (req, reply) => {
+  function requireSession(req: FastifyRequest, reply: FastifyReply) {
+    const session = getSession(req, deps.sessionSecret);
+    if (!session?.creatorId) {
+      reply.code(401).send({ code: "unauthorized", message: "Creator authentication required" });
+      return null;
+    }
+    return session;
+  }
+
+  app.post("/v1/ig/rules", async (req: FastifyRequest, reply: FastifyReply) => {
+    const session = requireSession(req, reply);
+    if (!session) return;
+
     const parsed = createRuleSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -143,7 +156,10 @@ export function registerRulesRoutes(
     return { data: ruleRecord };
   });
 
-  app.get("/v1/ig/rules", async (req, reply) => {
+  app.get("/v1/ig/rules", async (req: FastifyRequest, reply: FastifyReply) => {
+    const session = requireSession(req, reply);
+    if (!session) return;
+
     const q = req.query as { igUserId?: string };
     const igUserId = q.igUserId || getConnectedIgUserId();
 
@@ -166,7 +182,10 @@ export function registerRulesRoutes(
     return { data: filtered };
   });
 
-  app.patch("/v1/ig/rules/:id", async (req, reply) => {
+  app.patch("/v1/ig/rules/:id", async (req: FastifyRequest, reply: FastifyReply) => {
+    const session = requireSession(req, reply);
+    if (!session) return;
+
     const { id } = req.params as { id: string };
     const body = z
       .object({
@@ -221,7 +240,10 @@ export function registerRulesRoutes(
     return reply.code(404).send({ code: "not_found", message: "Rule not found" });
   });
 
-  app.delete("/v1/ig/rules/:id", async (req, reply) => {
+  app.delete("/v1/ig/rules/:id", async (req: FastifyRequest, reply: FastifyReply) => {
+    const session = requireSession(req, reply);
+    if (!session) return;
+
     const { id } = req.params as { id: string };
 
     // Instant delete from disk
@@ -237,7 +259,10 @@ export function registerRulesRoutes(
     return { ok: true };
   });
 
-  app.get("/v1/ig/autodm/status", async () => {
+  app.get("/v1/ig/autodm/status", async (req: FastifyRequest, reply: FastifyReply) => {
+    const session = requireSession(req, reply);
+    if (!session) return;
+
     try {
       const accounts = await deps.db
         .select({

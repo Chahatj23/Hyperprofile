@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, desc, eq, like, or } from "drizzle-orm";
 import {
@@ -22,13 +23,14 @@ export function registerAdminRoutes(
   // Middleware to check admin authorization
   async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<boolean> {
     const adminKey = req.headers["x-admin-key"] as string | undefined;
-    // In dev / test or with admin key matching secret
-    if (adminSecret && adminKey && adminKey === adminSecret) {
-      return true;
-    }
-    // Allow in non-production test mode if header present
-    if (process.env.NODE_ENV !== "production") {
-      return true;
+    if (adminSecret && adminKey && Buffer.byteLength(adminKey) === Buffer.byteLength(adminSecret)) {
+      try {
+        if (crypto.timingSafeEqual(Buffer.from(adminKey), Buffer.from(adminSecret))) {
+          return true;
+        }
+      } catch {
+        // invalid buffer
+      }
     }
     reply.code(403).send({ code: "forbidden", message: "Admin authorization required" });
     return false;

@@ -72,58 +72,51 @@ export function registerComplianceSafetyRoutes(app: FastifyInstance, options: { 
     return { ok: true, message: "Consent recorded" };
   });
 
-  // DPDP Buyer data export
+  // DPDP Buyer data export (privacy-preserving: never leaks PII to unauthenticated callers)
   app.post("/v1/compliance/data-export", async (req: FastifyRequest, reply: FastifyReply) => {
     const body = req.body as { email?: string };
     const email = body?.email?.trim().toLowerCase();
-    if (!email) return reply.code(400).send({ error: "Email is required" });
-
-    const buyer = (await db.select().from(buyers).where(eq(buyers.email, email)).limit(1))[0];
-    if (!buyer) {
-      return { email, found: false, records: [] };
+    if (!email || !email.includes("@")) {
+      return reply.code(400).send({ error: "Valid email is required" });
     }
 
-    const orderRows = await db.select().from(orders).where(eq(orders.buyerId, buyer.id));
-    const consentRows = await db
-      .select()
-      .from(consents)
-      .where(and(eq(consents.entityType, "buyer"), eq(consents.entityId, buyer.id)));
+    await db.insert(auditLog).values({
+      actor: `request:${email}`,
+      action: "data.export_request",
+      entity: `email:${email}`,
+      after: { requestedAt: new Date().toISOString(), ip: req.ip },
+    });
 
     return {
-      email,
-      found: true,
-      buyer: { id: buyer.id, email: buyer.email, name: buyer.name, createdAt: buyer.createdAt },
-      orders: orderRows,
-      consents: consentRows,
+      success: true,
+      message: "Your data export request has been received. If this email matches our records, instructions will be delivered to your verified email address.",
     };
   });
 
-  // DPDP Deletion request: keeps ledger integrity, anonymises personal identifiers
+  // DPDP Deletion request: registers pending request without allowing unauthenticated DoS data wiping
   app.post("/v1/compliance/deletion-request", async (req: FastifyRequest, reply: FastifyReply) => {
-    const body = req.body as { email?: string };
+    const body = req.body as { email?: string; reason?: string };
     const email = body?.email?.trim().toLowerCase();
-    if (!email) return reply.code(400).send({ error: "Email is required" });
+    if (!email || !email.includes("@")) {
+      return reply.code(400).send({ error: "Valid email is required" });
+    }
 
     await db.insert(deletionRequests).values({
       email,
       status: "pending",
     });
 
-    const buyer = (await db.select().from(buyers).where(eq(buyers.email, email)).limit(1))[0];
-    if (buyer) {
-      // Anonymise buyer personal data while preserving ledger order IDs
-      await db
-        .update(buyers)
-        .set({
-          name: "Anonymized Buyer",
-          phone: null,
-          email: `anonymized_${buyer.id}@deleted.local`,
-          updatedAt: new Date(),
-        })
-        .where(eq(buyers.id, buyer.id));
-    }
+    await db.insert(auditLog).values({
+      actor: `request:${email}`,
+      action: "deletion.request_submitted",
+      entity: `email:${email}`,
+      after: { status: "pending", reason: body.reason, ip: req.ip },
+    });
 
-    return { success: true, message: "Deletion request registered and identity anonymized" };
+    return {
+      success: true,
+      message: "Your account deletion request has been registered and is pending verification in accordance with DPDP regulations.",
+    };
   });
 
   // Content abuse report

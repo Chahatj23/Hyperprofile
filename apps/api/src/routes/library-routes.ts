@@ -19,6 +19,15 @@ import {
   provisionSessionBooking,
 } from "../bookings/booking-service.js";
 
+function maskEmail(email: string): string {
+  const parts = email.split("@");
+  if (parts.length !== 2) return "***";
+  const [name, domain] = parts;
+  if (!name || !domain) return "***";
+  const maskedName = name.length > 2 ? `${name[0]}***${name[name.length - 1]}` : `${name[0]}***`;
+  return `${maskedName}@${domain}`;
+}
+
 export function registerLibraryRoutes(app: FastifyInstance, options: { db: Db }) {
   const { db } = options;
 
@@ -330,7 +339,7 @@ export function registerLibraryRoutes(app: FastifyInstance, options: { db: Db })
       buyer: buyer
         ? {
             name: buyer.name,
-            email: buyer.email,
+            email: buyer.email ? maskEmail(buyer.email) : null,
           }
         : null,
       item: product ? { title: product.title, type: product.type } : null,

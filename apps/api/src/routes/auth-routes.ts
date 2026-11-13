@@ -25,6 +25,35 @@ function verifyPassword(password: string, storedHash: string): boolean {
 // In-memory OTP cache with 10-minute TTL: email -> { code, expiresAt }
 const otpStore = new Map<string, { code: string; expiresAt: number }>();
 
+// Defensive Rate Limiter against brute-force & credential stuffing
+interface RateLimitRecord {
+  attempts: number;
+  resetAt: number;
+}
+const rateLimitMap = new Map<string, RateLimitRecord>();
+
+function checkRateLimit(
+  key: string,
+  maxAttempts = 5,
+  windowMs = 15 * 60 * 1000,
+): { allowed: boolean; retryAfterSec?: number } {
+  const now = Date.now();
+  const record = rateLimitMap.get(key);
+  if (!record || record.resetAt <= now) {
+    rateLimitMap.set(key, { attempts: 1, resetAt: now + windowMs });
+    return { allowed: true };
+  }
+  if (record.attempts >= maxAttempts) {
+    return { allowed: false, retryAfterSec: Math.ceil((record.resetAt - now) / 1000) };
+  }
+  record.attempts += 1;
+  return { allowed: true };
+}
+
+function resetRateLimit(key: string) {
+  rateLimitMap.delete(key);
+}
+
 export function registerAuthRoutes(
   app: FastifyInstance,
   options: { db: Db; sessionSecret: string; isSecureCookie: boolean },
@@ -33,6 +62,15 @@ export function registerAuthRoutes(
 
   // 1. Password Registration
   app.post("/v1/auth/register", async (req: FastifyRequest, reply: FastifyReply) => {
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
+    const regLimit = checkRateLimit(`register:${ip}`, 10, 60 * 60 * 1000);
+    if (!regLimit.allowed) {
+      return reply.code(429).header("Retry-After", String(regLimit.retryAfterSec)).send({
+        code: "rate_limited",
+        message: `Too many registration attempts. Please retry in ${regLimit.retryAfterSec} seconds.`,
+      });
+    }
+
     const body = req.body as { email?: string; password?: string; displayName?: string; slug?: string };
     const email = body?.email?.trim().toLowerCase();
     const password = body?.password?.trim();
@@ -41,8 +79,8 @@ export function registerAuthRoutes(
     if (!email || !email.includes("@")) {
       return reply.code(400).send({ code: "invalid_email", message: "Valid email is required" });
     }
-    if (!password || password.length < 6) {
-      return reply.code(400).send({ code: "weak_password", message: "Password must be at least 6 characters" });
+    if (!password || password.length < 8) {
+      return reply.code(400).send({ code: "weak_password", message: "Password must be at least 8 characters long for security" });
     }
 
     const existingUser = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
@@ -110,6 +148,16 @@ export function registerAuthRoutes(
       return reply.code(400).send({ code: "missing_fields", message: "Email and password are required" });
     }
 
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
+    const loginRateKey = `login:${ip}:${email}`;
+    const rateCheck = checkRateLimit(loginRateKey, 5, 15 * 60 * 1000);
+    if (!rateCheck.allowed) {
+      return reply.code(429).header("Retry-After", String(rateCheck.retryAfterSec)).send({
+        code: "rate_limited",
+        message: `Too many failed login attempts. Temporarily locked for ${rateCheck.retryAfterSec} seconds.`,
+      });
+    }
+
     const user = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
     if (!user || !user.passwordHash) {
       return reply.code(401).send({ code: "invalid_credentials", message: "Invalid email or password" });
@@ -119,6 +167,9 @@ export function registerAuthRoutes(
     if (!isValid) {
       return reply.code(401).send({ code: "invalid_credentials", message: "Invalid email or password" });
     }
+
+    // Login successful: reset rate limit attempts
+    resetRateLimit(loginRateKey);
 
     let creator = (await db.select().from(creators).where(eq(creators.userId, user.id)).limit(1))[0];
     if (!creator) {
@@ -175,8 +226,8 @@ export function registerAuthRoutes(
     return {
       success: true,
       message: "Verification code sent to your email",
-      // Include code in non-production for instant automated testing
-      ...(process.env.NODE_ENV !== "production" ? { debugOtp: code } : {}),
+      // Include code strictly during automated tests when ALLOW_MOCK_OTP is enabled
+      ...(process.env.NODE_ENV === "test" && process.env.ALLOW_MOCK_OTP === "true" ? { debugOtp: code } : {}),
     };
   });
 
@@ -191,7 +242,7 @@ export function registerAuthRoutes(
     }
 
     const cached = otpStore.get(email);
-    const isMock = code === "123456" && process.env.NODE_ENV !== "production";
+    const isMock = code === "123456" && process.env.NODE_ENV === "test" && process.env.ALLOW_MOCK_OTP === "true";
     if (!isMock && (!cached || cached.code !== code || cached.expiresAt < Date.now())) {
       return reply.code(401).send({ code: "invalid_otp", message: "Invalid or expired verification code" });
     }
