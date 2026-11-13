@@ -36,12 +36,21 @@ function ConnectInner() {
           const authData = await authRes.json();
           if (authData?.user) {
             setCurrentUser(authData.user);
+            if (authData.instagram?.username) {
+              setConnectedAccount(authData.instagram.username);
+            }
           }
+        } else {
+          window.location.href = "/login?next=/connect";
+          return;
         }
-      } catch {}
+      } catch {
+        window.location.href = "/login?next=/connect";
+        return;
+      }
 
       try {
-        const res = await fetch("/v1/ig/accounts");
+        const res = await fetch("/v1/ig/accounts", { credentials: "include" });
         if (res.ok) {
           const json = await res.json();
           if (json.data && json.data.length > 0) {

@@ -28,6 +28,7 @@ import {
   type PaymentProvider,
 } from "@hyperprofile/payments";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
+import { getSession } from "./auth/session.js";
 import { registerCreatorRoutes } from "./routes/creator-routes.js";
 import { registerProductsRoutes } from "./routes/products-routes.js";
 import { registerCheckoutRoutes } from "./routes/checkout-routes.js";
@@ -539,7 +540,12 @@ app.post("/webhooks/razorpay", paymentWebhooks.handlePaymentWebhook);
 app.post("/api/webhooks/payments", paymentWebhooks.handlePaymentWebhook);
 app.post("/api/webhooks/razorpay", paymentWebhooks.handlePaymentWebhook);
 
-app.get("/v1/ig/accounts", async (_req, reply) => {
+app.get("/v1/ig/accounts", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   try {
     const rows = await db
       .select({
@@ -550,25 +556,11 @@ app.get("/v1/ig/accounts", async (_req, reply) => {
         createdAt: igAccounts.createdAt,
       })
       .from(igAccounts)
+      .where(session.creatorId ? eq(igAccounts.creatorId, session.creatorId) : undefined)
       .limit(50);
-    if (rows.length > 0) return { data: rows };
+    return { data: rows };
   } catch (err) {
-    logger.warn("database query failed for ig_accounts, checking local real store", { err: String(err) });
-  }
-
-  const saved = loadRealAccountFromFile();
-  if (saved) {
-    return {
-      data: [
-        {
-          id: saved.id,
-          igUserId: saved.igUserId,
-          username: saved.username,
-          tokenExpiresAt: saved.tokenExpiresAt ? new Date(saved.tokenExpiresAt) : null,
-          createdAt: new Date(saved.createdAt),
-        },
-      ],
-    };
+    logger.warn("database query failed for ig_accounts", { err: String(err) });
   }
 
   return { data: [] };
@@ -576,6 +568,11 @@ app.get("/v1/ig/accounts", async (_req, reply) => {
 
 /** Live Instagram profile + media + insights (token never returned). */
 app.get("/v1/ig/accounts/:id/overview", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+
   const { id } = req.params as { id: string };
   let account: {
     id: string;

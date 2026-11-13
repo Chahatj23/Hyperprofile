@@ -51,8 +51,7 @@ function LoginInner() {
       );
 
       setTimeout(() => {
-        router.push(nextUrl);
-        router.refresh();
+        window.location.href = nextUrl;
       }, 700);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");

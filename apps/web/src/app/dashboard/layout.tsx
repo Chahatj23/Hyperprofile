@@ -10,8 +10,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [authLoading, setAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [creatorUser, setCreatorUser] = useState<{ displayName: string; slug: string; username?: string; email?: string } | null>(null);
-  const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
-  const [loggingIn, setLoggingIn] = useState(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -31,27 +29,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           }
         }
         setIsAuthenticated(false);
+        window.location.href = `/login?next=${encodeURIComponent(pathname)}`;
       } catch {
         setIsAuthenticated(false);
+        window.location.href = `/login?next=${encodeURIComponent(pathname)}`;
       } finally {
         setAuthLoading(false);
       }
     }
 
-    async function checkAccount() {
-      try {
-        const res = await fetch("/v1/ig/accounts");
-        if (res.ok) {
-          const j = await res.json();
-          if (j?.data?.[0]?.username) {
-            setDetectedAccount(j.data[0].username);
-          }
-        }
-      } catch {}
-    }
-
     checkAuth();
-    checkAccount();
   }, [pathname]);
 
   const mainNav = [
@@ -124,10 +111,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         <div
           style={{
-            width: "min(460px, 100%)",
+            width: "min(420px, 100%)",
             background: "#ffffff",
             borderRadius: "24px",
-            padding: "44px 32px",
+            padding: "40px 32px",
             boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
             textAlign: "center",
           }}
@@ -151,7 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <h1
             style={{
-              fontSize: "1.5rem",
+              fontSize: "1.4rem",
               fontWeight: 800,
               color: "#0f172a",
               margin: "0 0 8px",
@@ -164,36 +151,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             style={{
               fontSize: "0.9rem",
               color: "#64748b",
-              margin: "0 0 28px",
+              margin: "0 0 24px",
               lineHeight: 1.5,
             }}
           >
-            This dashboard contains private creator tools, audience leads, and AutoDM rules. Please sign in with your Instagram account to access your workspace.
+            Redirecting to sign-in portal. Please authenticate with your creator credentials to access your workspace.
           </p>
-
-          {detectedAccount ? (
-            <div
-              style={{
-                marginBottom: "20px",
-                padding: "16px",
-                borderRadius: "14px",
-                background: "rgba(2, 132, 199, 0.06)",
-                border: "1px solid rgba(2, 132, 199, 0.18)",
-              }}
-            >
-              <div style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "6px" }}>
-                Connected Instagram Account
-              </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontSize: "1.1rem", fontWeight: 700, color: "#0f172a" }}>
-                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
-                @{detectedAccount}
-              </div>
-            </div>
-          ) : null}
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <Link
-              href="/login"
+              href={`/login?next=${encodeURIComponent(pathname)}`}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -232,89 +199,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
               <span>✦</span>
               <span>Create Free Creator Account</span>
-            </Link>
-
-            {detectedAccount && (
-              <button
-                type="button"
-                disabled={loggingIn}
-                onClick={async () => {
-                  setLoggingIn(true);
-                  try {
-                    const res = await fetch("/v1/auth/instagram/session", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      credentials: "include",
-                      body: JSON.stringify({ username: detectedAccount }),
-                    });
-                    if (res.ok) {
-                      window.location.reload();
-                      return;
-                    }
-                  } catch {
-                    // ignore
-                  } finally {
-                    setLoggingIn(false);
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "10px",
-                  padding: "11px 20px",
-                  borderRadius: "12px",
-                  background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-                  color: "#ffffff",
-                  fontSize: "0.88rem",
-                  fontWeight: 700,
-                  border: "none",
-                  cursor: loggingIn ? "wait" : "pointer",
-                  boxShadow: "0 3px 10px rgba(220, 39, 67, 0.25)",
-                }}
-              >
-                <span>📸</span>
-                <span>{loggingIn ? "Signing In…" : `Quick Access as @${detectedAccount} →`}</span>
-              </button>
-            )}
-
-            {detectedAccount && (
-              <Link
-                href={`/${detectedAccount}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "10px 20px",
-                  borderRadius: "12px",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                }}
-              >
-                View Public Store (hyperprofile.bio/{detectedAccount}) ↗
-              </Link>
-            )}
-
-            <Link
-              href="/"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "10px 20px",
-                borderRadius: "12px",
-                background: "transparent",
-                color: "#64748b",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              ← Back to Homepage
             </Link>
           </div>
         </div>
@@ -608,7 +492,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             type="button"
             onClick={async () => {
               try {
-                await fetch("/v1/auth/logout", { method: "POST" });
+                await fetch("/v1/auth/logout", { method: "POST", credentials: "include" });
               } catch {}
               window.location.href = "/login";
             }}
