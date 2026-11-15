@@ -241,8 +241,11 @@ export function registerAuthRoutes(
       success: true,
       isDeliveredViaEmail: mailResult.sent,
       provider: mailResult.provider,
+      ...(mailResult.previewUrl ? { previewUrl: mailResult.previewUrl } : {}),
       message: mailResult.sent
-        ? `Verification code sent to ${email}. Please check your inbox.`
+        ? mailResult.provider === "ethereal"
+          ? `Verification email delivered! Click to preview in web inbox.`
+          : `Verification code sent to ${email}. Please check your inbox.`
         : `Preview Code: ${code} (Auto-filled below). To receive real emails in your inbox, configure SMTP or RESEND_API_KEY in .env.`,
       code,
       debugOtp: code,

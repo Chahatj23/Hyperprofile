@@ -19,6 +19,7 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
   const [otpSent, setOtpSent] = useState(false);
   const [isDeliveredViaEmail, setIsDeliveredViaEmail] = useState(false);
   const [receivedOtp, setReceivedOtp] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -118,12 +119,17 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
       const receivedCode = data.code || data.debugOtp;
       setOtpSent(true);
       setIsDeliveredViaEmail(Boolean(data.isDeliveredViaEmail));
+      setPreviewUrl(data.previewUrl || null);
       if (receivedCode) {
         setReceivedOtp(receivedCode);
         setOtpCode(receivedCode);
       }
       if (data.isDeliveredViaEmail) {
-        setSuccessMsg(`✓ Verification code sent to ${email}. Please check your inbox.`);
+        setSuccessMsg(
+          data.provider === "ethereal"
+            ? `✓ Email dispatched! Check preview webmail below or use code.`
+            : `✓ Verification code sent to ${email}. Please check your inbox.`
+        );
       } else {
         setSuccessMsg(null);
       }
@@ -455,11 +461,68 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
                   <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "4px" }}>
                     Auto-filled below. Click below to verify and enter workspace.
                   </div>
+                  {previewUrl && (
+                    <div style={{ marginTop: "10px" }}>
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "6px 12px",
+                          borderRadius: "8px",
+                          background: "#e0f2fe",
+                          color: "#0369a1",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          textDecoration: "none",
+                        }}
+                      >
+                        <span>📬 Open Test Webmail Preview →</span>
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
               {isDeliveredViaEmail && (
-                <div style={{ padding: "12px 14px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.25)", color: "#059669", fontSize: "0.82rem", fontWeight: 600 }}>
-                  ✓ 6-digit code delivered to your email inbox ({email}).
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "10px",
+                    background: "rgba(16, 185, 129, 0.08)",
+                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                    color: "#059669",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    textAlign: "center",
+                  }}
+                >
+                  <div>✓ 6-digit code delivered to your email ({email}).</div>
+                  {previewUrl && (
+                    <div style={{ marginTop: "8px" }}>
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "6px 12px",
+                          borderRadius: "8px",
+                          background: "#ecfdf5",
+                          color: "#047857",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          textDecoration: "none",
+                        }}
+                      >
+                        <span>📬 Open Test Webmail Inbox →</span>
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
               <div>

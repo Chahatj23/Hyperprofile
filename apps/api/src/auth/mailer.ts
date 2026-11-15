@@ -12,6 +12,7 @@ export interface MailResult {
   sent: boolean;
   provider: string;
   id?: string;
+  previewUrl?: string;
   error?: string;
 }
 
@@ -85,7 +86,42 @@ export async function sendEmail(opts: MailOptions): Promise<MailResult> {
     }
   }
 
-  // 3. Fallback Logger (Development / Preview / Staging without configured mail provider)
+  // 3. Ethereal Email Test Mailbox (Provides instant live viewable inbox link)
+  try {
+    const testAccount = await nodemailer.createTestAccount();
+    const testTransporter = nodemailer.createTransport({
+      host: testAccount.smtp.host,
+      port: testAccount.smtp.port,
+      secure: testAccount.smtp.secure,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+
+    const info = await testTransporter.sendMail({
+      from: `"Hyperprofile" <${testAccount.user}>`,
+      to,
+      subject,
+      html,
+      text: text || html.replace(/<[^>]+>/g, ""),
+    });
+
+    const testUrl = nodemailer.getTestMessageUrl(info);
+    const previewUrl = typeof testUrl === "string" ? testUrl : undefined;
+    logger.info("email sent via ethereal test account", { to, subject, previewUrl });
+
+    return {
+      sent: true,
+      provider: "ethereal",
+      id: info.messageId,
+      ...(previewUrl ? { previewUrl } : {}),
+    };
+  } catch (err) {
+    logger.debug("ethereal test mailer skipped or unavailable", { err: String(err) });
+  }
+
+  // 4. Fallback Logger (Development / Preview without internet SMTP access)
   logger.info("auth otp email generated (preview delivery)", {
     to,
     subject,
