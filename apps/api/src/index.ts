@@ -521,8 +521,9 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
     const userRow = creatorUserRow
       ? (await db.select().from(users).where(eq(users.id, creatorUserRow.userId)).limit(1))[0]
       : null;
+    let sessionToken: string | null = null;
     if (userRow) {
-      const sessionToken = signSession(
+      sessionToken = signSession(
         {
           userId: userRow.id,
           email: userRow.email,
@@ -536,9 +537,12 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
 
     reply.clearCookie("ig_oauth_state", { path: "/" });
     logger.info("real instagram account connected", { igUserId: profile.id, username: profile.username, creatorId });
-    return reply.redirect(
-      `${redirectOrigin}/connect?ok=1&username=${encodeURIComponent(profile.username)}`,
-    );
+    const redirectParams = new URLSearchParams({
+      ok: "1",
+      username: profile.username,
+      ...(sessionToken ? { session_token: sessionToken } : {}),
+    });
+    return reply.redirect(`${redirectOrigin}/connect?${redirectParams.toString()}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error("instagram callback failed", { err: message });

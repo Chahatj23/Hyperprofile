@@ -13,8 +13,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     async function checkAuth() {
+      const token = typeof window !== "undefined" ? localStorage.getItem("hp_token") : null;
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       try {
-        const res = await fetch("/v1/auth/me", { credentials: "include" });
+        const res = await fetch("/v1/auth/me", {
+          credentials: "include",
+          headers: Object.keys(headers).length ? headers : undefined,
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.creator) {

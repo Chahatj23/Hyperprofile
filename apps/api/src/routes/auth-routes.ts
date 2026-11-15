@@ -138,6 +138,7 @@ export function registerAuthRoutes(
 
     return {
       success: true,
+      token,
       user: { id: user.id, email: user.email, role: user.role },
       creator: { id: creator.id, slug: creator.slug, displayName: creator.displayName, plan: creator.plan },
     };
@@ -207,6 +208,7 @@ export function registerAuthRoutes(
 
     return {
       success: true,
+      token,
       user: { id: user.id, email: user.email, role: user.role },
       creator: { id: creator.id, slug: creator.slug, displayName: creator.displayName, plan: creator.plan },
       instagram: ig ? { id: ig.id, igUserId: ig.igUserId, username: ig.username } : null,
@@ -300,6 +302,7 @@ export function registerAuthRoutes(
 
     return {
       success: true,
+      token,
       user: { id: user.id, email: user.email, role: user.role },
       creator: { id: creator.id, slug: creator.slug, displayName: creator.displayName, plan: creator.plan },
     };

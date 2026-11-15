@@ -51,7 +51,13 @@ export function clearSessionCookie(reply: FastifyReply) {
 }
 
 export function getSession(req: FastifyRequest, secret: string): SessionPayload | null {
-  const token = req.cookies[COOKIE_NAME];
+  let token = req.cookies[COOKIE_NAME];
+  if (!token && req.headers.authorization) {
+    const authHeader = req.headers.authorization;
+    if (authHeader.startsWith("Bearer ") || authHeader.startsWith("bearer ")) {
+      token = authHeader.slice(7).trim();
+    }
+  }
   if (!token) return null;
   return verifySession(token, secret);
 }

@@ -2,9 +2,25 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
 
-  // Protect all /dashboard routes, /connect, and /insights from unauthenticated access
+  // 1. Cross-domain OAuth / API session token bridge
+  const tokenParam = searchParams.get("session_token");
+  if (tokenParam) {
+    const cleanUrl = new URL(request.url);
+    cleanUrl.searchParams.delete("session_token");
+    const response = NextResponse.redirect(cleanUrl);
+    response.cookies.set("hp_session", tokenParam, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+      maxAge: 30 * 24 * 3600,
+    });
+    return response;
+  }
+
+  // 2. Protect all /dashboard routes, /connect, and /insights from unauthenticated access
   if (pathname.startsWith("/dashboard") || pathname.startsWith("/connect") || pathname.startsWith("/insights")) {
     const sessionCookie = request.cookies.get("hp_session");
 

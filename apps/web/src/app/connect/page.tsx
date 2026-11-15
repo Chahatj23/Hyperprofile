@@ -9,17 +9,30 @@ function ConnectInner() {
   const ok = params.get("ok");
   const username = params.get("username");
   const error = params.get("error");
+  const sessionToken = params.get("session_token");
 
   const [connectedAccount, setConnectedAccount] = useState<string | null>(username || null);
   const [currentUser, setCurrentUser] = useState<{ email?: string; slug?: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
+  if (typeof window !== "undefined" && sessionToken) {
+    try {
+      const isHttps = window.location.protocol === "https:";
+      document.cookie = `hp_session=${sessionToken}; path=/; max-age=2592000; SameSite=Lax${isHttps ? "; Secure" : ""}`;
+      localStorage.setItem("hp_token", sessionToken);
+    } catch {}
+  }
+
   async function launchWorkspace(dest: string) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("hp_token") : null;
+    const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) authHeaders.Authorization = `Bearer ${token}`;
+
     if (connectedAccount) {
       try {
         await fetch("/v1/ig/accounts/connect", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders,
           credentials: "include",
           body: JSON.stringify({ username: connectedAccount }),
         });
@@ -30,8 +43,15 @@ function ConnectInner() {
 
   useEffect(() => {
     async function checkAuthAndAccounts() {
+      const token = typeof window !== "undefined" ? localStorage.getItem("hp_token") : null;
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       try {
-        const authRes = await fetch("/v1/auth/me", { credentials: "include" });
+        const authRes = await fetch("/v1/auth/me", {
+          credentials: "include",
+          headers: Object.keys(headers).length ? headers : undefined,
+        });
         if (authRes.ok) {
           const authData = await authRes.json();
           if (authData?.user) {
@@ -50,7 +70,10 @@ function ConnectInner() {
       }
 
       try {
-        const res = await fetch("/v1/ig/accounts", { credentials: "include" });
+        const res = await fetch("/v1/ig/accounts", {
+          credentials: "include",
+          headers: Object.keys(headers).length ? headers : undefined,
+        });
         if (res.ok) {
           const json = await res.json();
           if (json.data && json.data.length > 0) {
