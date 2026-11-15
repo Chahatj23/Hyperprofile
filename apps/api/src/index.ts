@@ -547,8 +547,10 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
     const message = err instanceof Error ? err.message : String(err);
     logger.error("instagram callback failed", { err: message });
     const short =
-      message.length > 180 || message.includes("Attempts:")
-        ? "Could not resolve Instagram profile from token. Check API logs."
+      message.includes("Attempts:")
+        ? message.split("Attempts:")[0]!.trim() || "Could not resolve Instagram profile from token."
+        : message.length > 250
+        ? message.slice(0, 240) + "..."
         : message;
     return reply.redirect(`${redirectOrigin}/connect?error=${encodeURIComponent(short)}`);
   }
