@@ -253,7 +253,7 @@ export async function fetchInstagramProfile(
     const json = await graphGet(
       `${base}/me/accounts`,
       accessToken,
-      "id,name,instagram_business_account{id,username,name,profile_picture_url}",
+      "id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}",
     );
     attempts.push({ path: "/me/accounts", json });
     const pages = (json.data as Array<Record<string, unknown>> | undefined) ?? [];
@@ -262,6 +262,20 @@ export async function fetchInstagramProfile(
       if (ig) {
         const profile = profileFromIgNode(ig, json);
         if (profile) return profile;
+      }
+      // If page token is present, query the page node directly for its instagram account
+      if (page.id && page.access_token && typeof page.access_token === "string") {
+        const pageIgJson = await graphGet(
+          `${base}/${page.id}`,
+          page.access_token,
+          "id,name,instagram_business_account{id,username,name,profile_picture_url}",
+        );
+        attempts.push({ path: `/${page.id} (page token)`, json: pageIgJson });
+        const pageIg = pageIgJson.instagram_business_account as Record<string, unknown> | undefined;
+        if (pageIg) {
+          const profile = profileFromIgNode(pageIg, pageIgJson);
+          if (profile) return profile;
+        }
       }
     }
   }
@@ -281,12 +295,53 @@ export async function fetchInstagramProfile(
     }
   }
 
-  // 3) Instagram Graph user token shape
+  // 3) Meta Business Portfolio edges (opts.businessId or /me/businesses)
+  {
+    const candidateBizIds = new Set<string>();
+    if (opts.businessId) candidateBizIds.add(opts.businessId);
+
+    const bizJson = await graphGet(`${base}/me/businesses`, accessToken, "id,name");
+    attempts.push({ path: "/me/businesses", json: bizJson });
+    const bizList = (bizJson.data as Array<Record<string, unknown>> | undefined) ?? [];
+    for (const b of bizList) {
+      if (b.id) candidateBizIds.add(String(b.id));
+    }
+
+    for (const bId of candidateBizIds) {
+      for (const edge of ["instagram_accounts", "owned_instagram_accounts", "client_instagram_accounts"]) {
+        const igListJson = await graphGet(
+          `${base}/${bId}/${edge}`,
+          accessToken,
+          "id,username,name,profile_picture_url",
+        );
+        attempts.push({ path: `/${bId}/${edge}`, json: igListJson });
+        const rows = (igListJson.data as Array<Record<string, unknown>> | undefined) ?? [];
+        for (const ig of rows) {
+          const profile = profileFromIgNode(ig, igListJson);
+          if (profile) return profile;
+        }
+      }
+    }
+  }
+
+  // 4) Direct user node inspection
+  {
+    const json = await graphGet(
+      `${base}/me`,
+      accessToken,
+      "id,name,username,instagram_business_account{id,username,name,profile_picture_url}",
+    );
+    attempts.push({ path: "/me", json });
+    const profile = profileFromIgNode(json, json);
+    if (profile) return profile;
+  }
+
+  // 5) Instagram Graph user token shape
   {
     const json = await graphGet(
       `https://graph.instagram.com/${graphVersion}/me`,
       accessToken,
-      "user_id,username,name,account_type,profile_picture_url",
+      "id,username,name,account_type,profile_picture_url",
     );
     attempts.push({ path: "graph.instagram.com/me", json });
     const profile = profileFromIgNode(json, json);

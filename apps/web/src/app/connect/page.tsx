@@ -197,8 +197,30 @@ function ConnectInner() {
             </div>
 
             {error && (
-              <div className="status err" style={{ marginBottom: "16px" }}>
-                Could not connect: {error}
+              <div style={{ marginBottom: "20px" }}>
+                <div className="status err" style={{ marginBottom: "12px", padding: "12px 14px", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "10px", color: "#f87171", fontSize: "0.86rem" }}>
+                  <strong>Connection Error:</strong> {error}
+                </div>
+
+                <div style={{ padding: "16px", background: "rgba(2, 132, 199, 0.06)", border: "1px solid rgba(2, 132, 199, 0.2)", borderRadius: "12px", fontSize: "0.82rem", lineHeight: 1.6 }}>
+                  <div style={{ fontWeight: 700, color: "#38bdf8", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span>💡</span> How to solve this in 3 quick steps:
+                  </div>
+                  <ol style={{ paddingLeft: "18px", margin: "0 0 10px", color: "var(--ink)" }}>
+                    <li style={{ marginBottom: "6px" }}>
+                      <strong>Switch to Creator Profile:</strong> In your Instagram mobile app &rarr; <em>Settings</em> &rarr; <em>Account type and tools</em> &rarr; tap <strong>Switch to Professional Account</strong> (select <em>Creator</em>). Personal accounts are blocked by Meta's Graph API.
+                    </li>
+                    <li style={{ marginBottom: "6px" }}>
+                      <strong>Link a Facebook Page:</strong> In your Instagram app &rarr; <em>Edit Profile</em> &rarr; <em>Public Business Information / Page</em> &rarr; link or create a free Facebook Page.
+                    </li>
+                    <li style={{ marginBottom: "6px" }}>
+                      <strong>Check Permissions in Popup:</strong> When the Facebook popup opens, click <em>Edit settings</em> and make sure the checkbox next to your Instagram account and Facebook page is checked.
+                    </li>
+                  </ol>
+                  <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
+                    If your Meta App is in Development mode (App ID <code>2808976552852144</code>), also add your Instagram username under <strong>Roles &rarr; Instagram Testers</strong> in the Meta Dashboard.
+                  </div>
+                </div>
               </div>
             )}
 
