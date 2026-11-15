@@ -237,6 +237,8 @@ export function registerAuthRoutes(
 
     const mailResult = await sendOtpEmail(email, code);
 
+    const isOfflineFallback = !mailResult.sent && process.env.NODE_ENV !== "production";
+
     return {
       success: true,
       isDeliveredViaEmail: mailResult.sent,
@@ -247,8 +249,7 @@ export function registerAuthRoutes(
           ? `Verification email delivered! Click to preview in web inbox.`
           : `Verification code sent to ${email}. Please check your inbox.`
         : `Preview Code: ${code} (Auto-filled below). To receive real emails in your inbox, configure SMTP or RESEND_API_KEY in .env.`,
-      code,
-      debugOtp: code,
+      ...(isOfflineFallback ? { code, debugOtp: code } : {}),
     };
   });
 

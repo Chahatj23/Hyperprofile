@@ -116,13 +116,16 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
         return;
       }
 
-      const receivedCode = data.code || data.debugOtp;
+      const receivedCode = !data.isDeliveredViaEmail ? (data.code || data.debugOtp) : null;
       setOtpSent(true);
       setIsDeliveredViaEmail(Boolean(data.isDeliveredViaEmail));
       setPreviewUrl(data.previewUrl || null);
       if (receivedCode) {
         setReceivedOtp(receivedCode);
         setOtpCode(receivedCode);
+      } else {
+        setReceivedOtp(null);
+        setOtpCode("");
       }
       if (data.isDeliveredViaEmail) {
         setSuccessMsg(
@@ -499,7 +502,7 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
                     textAlign: "center",
                   }}
                 >
-                  <div>✓ 6-digit code delivered to your email ({email}).</div>
+                  <div>✉️ 6-digit verification code sent to <strong>{email}</strong>. Please check your inbox and enter the code below.</div>
                   {previewUrl && (
                     <div style={{ marginTop: "8px" }}>
                       <a
