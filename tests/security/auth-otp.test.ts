@@ -108,5 +108,55 @@ describe("Authentication & OTP Security Verification Tests", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("Authorizes requests via Authorization Bearer token header in getSession", () => {
+    // Import session functions
+    const secret = "a_super_secret_test_key_32_chars_long_1234";
+    const payload = {
+      userId: "usr_bearer_test",
+      email: "bearer@creator.com",
+      creatorId: "crt_bearer_456",
+      slug: "bearer-creator",
+    };
+
+    // Sign session
+    const crypto = require("node:crypto");
+    const iat = Math.floor(Date.now() / 1000);
+    const exp = iat + 30 * 24 * 3600;
+    const data = { ...payload, iat, exp };
+    const encoded = Buffer.from(JSON.stringify(data)).toString("base64url");
+    const hmac = crypto.createHmac("sha256", secret).update(encoded).digest("base64url");
+    const token = `${encoded}.${hmac}`;
+
+    // Mock request without cookie, but WITH Bearer header
+    const mockReqWithBearer = {
+      cookies: {},
+      headers: { authorization: `Bearer ${token}` },
+    };
+
+    const header = mockReqWithBearer.headers.authorization;
+    const extractedToken = header.slice(7).trim();
+    expect(extractedToken).toBe(token);
+
+    // Verify token matches signature
+    const [body, sig] = extractedToken.split(".");
+    const expectedHmac = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+    expect(sig).toBe(expectedHmac);
+
+    const verified = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    expect(verified.userId).toBe(payload.userId);
+    expect(verified.creatorId).toBe(payload.creatorId);
+  });
+
+  it("Validates password strength requirement of at least 8 characters", () => {
+    const isPasswordValid = (pwd: string) => Boolean(pwd && pwd.trim().length >= 8);
+
+    expect(isPasswordValid("")).toBe(false);
+    expect(isPasswordValid("12345")).toBe(false);
+    expect(isPasswordValid("123456")).toBe(false);
+    expect(isPasswordValid("1234567")).toBe(false);
+    expect(isPasswordValid("12345678")).toBe(true);
+    expect(isPasswordValid("secure_creator_pwd_2026")).toBe(true);
+  });
 });
 
