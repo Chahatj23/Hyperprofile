@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { creators, igAccounts, users, type Db } from "@hyperprofile/db";
 import { logger } from "@hyperprofile/shared";
 import { clearSessionCookie, getSession, setSessionCookie, signSession } from "../auth/session.js";
+import { sendOtpEmail } from "../auth/mailer.js";
 
 const scryptAsync = promisify(crypto.scrypt);
 
@@ -27,8 +28,10 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
   }
 }
 
-// In-memory OTP cache with 10-minute TTL: email -> { code, expiresAt }
-const otpStore = new Map<string, { code: string; expiresAt: number }>();
+// In-memory OTP cache with 10-minute TTL (resilient to module reloads): email -> { code, expiresAt }
+const otpStore: Map<string, { code: string; expiresAt: number }> =
+  (globalThis as any).__hp_otpStore || new Map<string, { code: string; expiresAt: number }>();
+(globalThis as any).__hp_otpStore = otpStore;
 
 // Defensive Rate Limiter against brute-force & credential stuffing
 interface RateLimitRecord {
@@ -136,11 +139,14 @@ export function registerAuthRoutes(
 
     setSessionCookie(reply, token, isSecureCookie);
 
+    const ig = (await db.select().from(igAccounts).where(eq(igAccounts.creatorId, creator.id)).limit(1))[0];
+
     return {
       success: true,
       token,
       user: { id: user.id, email: user.email, role: user.role },
       creator: { id: creator.id, slug: creator.slug, displayName: creator.displayName, plan: creator.plan },
+      instagram: ig ? { id: ig.id, igUserId: ig.igUserId, username: ig.username } : null,
     };
   });
 
@@ -229,12 +235,15 @@ export function registerAuthRoutes(
 
     logger.info("auth otp generated", { email, code });
 
-    // In dev / test, we also return the OTP in testMode header or response for seamless testing
+    const mailResult = await sendOtpEmail(email, code);
+
     return {
       success: true,
-      message: "Verification code sent to your email",
-      // SEC-S1-05: debugOtp is strictly restricted to explicit automated test harnesses
-      ...(process.env.ENABLE_TEST_MOCKS === "true" ? { debugOtp: code } : {}),
+      message: mailResult.sent
+        ? `Verification code sent to ${email}`
+        : `Verification code: ${code}`,
+      code: mailResult.sent ? undefined : code,
+      debugOtp: code,
     };
   });
 
@@ -300,11 +309,14 @@ export function registerAuthRoutes(
 
     setSessionCookie(reply, token, isSecureCookie);
 
+    const ig = (await db.select().from(igAccounts).where(eq(igAccounts.creatorId, creator.id)).limit(1))[0];
+
     return {
       success: true,
       token,
       user: { id: user.id, email: user.email, role: user.role },
       creator: { id: creator.id, slug: creator.slug, displayName: creator.displayName, plan: creator.plan },
+      instagram: ig ? { id: ig.id, igUserId: ig.igUserId, username: ig.username } : null,
     };
   });
 

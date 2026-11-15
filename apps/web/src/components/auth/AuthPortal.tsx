@@ -113,8 +113,14 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
         return;
       }
 
+      const receivedCode = data.code || data.debugOtp;
       setOtpSent(true);
-      setSuccessMsg(data.debugOtp ? `Verification code: ${data.debugOtp}` : "6-digit code sent to your email!");
+      if (receivedCode) {
+        setOtpCode(receivedCode);
+        setSuccessMsg(`Verification code: ${receivedCode}`);
+      } else {
+        setSuccessMsg(data.message || "6-digit code sent to your email!");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
