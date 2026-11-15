@@ -239,7 +239,7 @@ export async function processIncomingDmMessage(
           replyText = `You're awesome! 🎉 Here is your direct access link:\n\n👉 ${session.resourceLink}`;
         }
       } else {
-        replyText = `To get your instant access, please make sure you follow @jinbandhan, then reply "YES" or send your email address right here! ✨`;
+        replyText = `To get your instant access, please make sure you follow our profile, then reply "YES" or send your email address right here! ✨`;
       }
     }
   }

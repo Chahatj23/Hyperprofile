@@ -119,11 +119,7 @@ export async function fetchIgAccountOverview(
   const mediaLimit = opts.mediaLimit ?? 12;
   const warnings: string[] = [];
 
-  // Automatically resolve Page ID 1455386567656707 to real Instagram Business Account ID 17841453478293915
   let targetIgId = igUserId;
-  if (targetIgId === "1455386567656707") {
-    targetIgId = "17841453478293915";
-  }
 
   let profileRes = await graphGet(`${base}/${targetIgId}`, accessToken, {
     fields:
@@ -156,8 +152,8 @@ export async function fetchIgAccountOverview(
   const igAcc = p.instagram_business_account as Record<string, unknown> | undefined;
   const profile: IgLiveProfile = {
     id: String(igAcc?.id ?? p.id ?? targetIgId),
-    username: String(igAcc?.username ?? p.username ?? "jinbandhan"),
-    name: str(igAcc?.name ?? p.name) ?? "jinbandhan",
+    username: String(igAcc?.username ?? p.username ?? ""),
+    name: str(igAcc?.name ?? p.name) ?? "",
     biography: str(p.biography),
     website: str(p.website),
     profilePictureUrl: str(igAcc?.profile_picture_url ?? p.profile_picture_url),
@@ -283,11 +279,7 @@ export async function fetchIgReels(
   const version = opts.graphVersion ?? "v21.0";
   const base = `https://graph.facebook.com/${version}`;
   const mediaLimit = opts.mediaLimit ?? 25;
-
-  let targetIgId = igUserId;
-  if (targetIgId === "1455386567656707") {
-    targetIgId = "17841453478293915";
-  }
+  const targetIgId = igUserId;
 
   let mediaRes = await graphGet(`${base}/${targetIgId}/media`, accessToken, {
     fields:

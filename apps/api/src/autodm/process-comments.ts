@@ -100,14 +100,17 @@ export async function processCommentWebhook(
     if (!igUserId) continue;
 
     let plan = "free";
+    let creatorHandle = "";
     try {
       const igAccount = (
         await db
-          .select({ creatorId: igAccounts.creatorId })
+          .select({ creatorId: igAccounts.creatorId, username: igAccounts.username })
           .from(igAccounts)
           .where(eq(igAccounts.igUserId, igUserId))
           .limit(1)
       )[0];
+
+      if (igAccount?.username) creatorHandle = igAccount.username;
 
       if (igAccount?.creatorId) {
         const creator = (
@@ -253,7 +256,8 @@ export async function processCommentWebhook(
         });
 
         if (rule.askToFollow) {
-          dmText = `Hey @${username}! 👋 Thanks for checking out our post! To unlock your exclusive resource, make sure you're following @jinbandhan first.\n\nOnce followed, reply "YES" or send your email address right here!`;
+          const followTarget = creatorHandle ? `@${creatorHandle}` : "our profile";
+          dmText = `Hey @${username}! 👋 Thanks for checking out our post! To unlock your exclusive resource, make sure you're following ${followTarget} first.\n\nOnce followed, reply "YES" or send your email address right here!`;
         } else {
           dmText = `Hey @${username}! 🚀 What's your best email address to send your instant download and bonus templates?`;
         }

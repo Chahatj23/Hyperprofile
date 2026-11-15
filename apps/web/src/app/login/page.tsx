@@ -10,8 +10,8 @@ function LoginInner() {
   const nextUrl = searchParams.get("next") || "/dashboard/autodm";
 
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("chahat@jinbandhan.com");
-  const [password, setPassword] = useState("Jinbandhan@123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -232,7 +232,7 @@ function LoginInner() {
               </label>
               <input
                 type="text"
-                placeholder="e.g. Jinbandhan or Chahat Jain"
+                placeholder="e.g. Priya Sharma or Alex Rivera"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 required={mode === "register"}
@@ -351,43 +351,6 @@ function LoginInner() {
             </div>
           </div>
 
-          {/* Quick Demo Hint */}
-          {mode === "login" && (
-            <div
-              style={{
-                padding: "10px 12px",
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: "10px",
-                fontSize: "0.76rem",
-                color: "#475569",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span>Demo Account: <strong>chahat@jinbandhan.com</strong></span>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("chahat@jinbandhan.com");
-                  setPassword("Jinbandhan@123");
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#0284c7",
-                  fontSize: "0.76rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-              >
-                Fill credentials
-              </button>
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
@@ -414,18 +377,6 @@ function LoginInner() {
 
         {/* Footer Navigation */}
         <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid #f1f5f9", textAlign: "center", display: "flex", flexDirection: "column", gap: "10px" }}>
-          <Link
-            href="/jinbandhan"
-            style={{
-              fontSize: "0.85rem",
-              color: "#0284c7",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            View Public Creator Store (hyperprofile.bio/jinbandhan) ↗
-          </Link>
-
           <Link
             href="/"
             style={{

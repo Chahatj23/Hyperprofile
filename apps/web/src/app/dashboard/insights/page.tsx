@@ -58,7 +58,7 @@ type ActivityItem = {
 export default function DashboardInsightsPage() {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [connectedAccount, setConnectedAccount] = useState<string>("jinbandhan");
+  const [connectedAccount, setConnectedAccount] = useState<string>("");
   const [pending, startTransition] = useTransition();
 
   // Navigation tab
@@ -227,15 +227,19 @@ export default function DashboardInsightsPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <h2 style={{ fontSize: "1.2rem", fontWeight: 700, margin: 0, color: "#111827" }}>
-                @{data?.profile.username || connectedAccount}
+                {data?.profile.username ? `@${data.profile.username}` : (connectedAccount ? `@${connectedAccount}` : "Instagram Insights")}
               </h2>
-              <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: "10px", background: "#eff6ff", color: "#1d4ed8", fontWeight: 700 }}>
-                Verified Business
-              </span>
+              {data?.profile.username && (
+                <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: "10px", background: "#eff6ff", color: "#1d4ed8", fontWeight: 700 }}>
+                  Verified Business
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: "0.82rem", color: "#6b7280", marginTop: "4px" }}>
-              Instagram Business ID: <code>{data?.profile.id || "17841453478293915"}</code> · Connected Meta Page ID: <code>1455386567656707</code>
-            </div>
+            {data?.profile.id && (
+              <div style={{ fontSize: "0.82rem", color: "#6b7280", marginTop: "4px" }}>
+                Instagram Business ID: <code>{data.profile.id}</code>
+              </div>
+            )}
           </div>
         </div>
 
@@ -243,7 +247,7 @@ export default function DashboardInsightsPage() {
         <div style={{ display: "flex", gap: "32px", alignItems: "center" }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#111827" }}>
-              {data?.profile.followersCount ?? 1}
+              {data?.profile.followersCount ?? 0}
             </div>
             <div style={{ fontSize: "0.75rem", color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Followers</div>
           </div>
@@ -252,7 +256,7 @@ export default function DashboardInsightsPage() {
 
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#111827" }}>
-              {data?.profile.followsCount ?? 2}
+              {data?.profile.followsCount ?? 0}
             </div>
             <div style={{ fontSize: "0.75rem", color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Following</div>
           </div>
@@ -261,7 +265,7 @@ export default function DashboardInsightsPage() {
 
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#111827" }}>
-              {data?.profile.mediaCount ?? (data?.media?.length || 1)}
+              {data?.profile.mediaCount ?? (data?.media?.length || 0)}
             </div>
             <div style={{ fontSize: "0.75rem", color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Posts</div>
           </div>
@@ -272,7 +276,7 @@ export default function DashboardInsightsPage() {
       <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
         {[
           { id: "overview", label: "Analytics Overview" },
-          { id: "media", label: `Posts & Reels (${data?.media?.length || 1})` },
+          { id: "media", label: `Posts & Reels (${data?.media?.length || 0})` },
           { id: "activity", label: `Activity Stream (${activities.length})` },
         ].map((t) => (
           <button

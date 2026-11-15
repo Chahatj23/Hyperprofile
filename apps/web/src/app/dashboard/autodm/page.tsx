@@ -78,10 +78,10 @@ export default function AutoDmPage() {
   // SuperAI query input
   const [aiQuery, setAiQuery] = useState("");
 
-  // Account state strictly for @jinbandhan
+  // Connected Instagram Account state
   const [igAccount, setIgAccount] = useState<{ username?: string; igUserId?: string }>({
-    username: "jinbandhan",
-    igUserId: "17841453478293915",
+    username: "",
+    igUserId: "",
   });
   const [metaError, setMetaError] = useState<string | null>(null);
   const [testToast, setTestToast] = useState<string | null>(null);
@@ -180,7 +180,7 @@ export default function AutoDmPage() {
           if (json?.account?.username) {
             setIgAccount({
               username: json.account.username,
-              igUserId: json.account.igUserId || "17841453478293915",
+              igUserId: json.account.igUserId || "",
             });
           }
           const items = json?.media || json?.reels || [];
@@ -194,6 +194,12 @@ export default function AutoDmPage() {
           fetch("/v1/ig/reels")
             .then((res) => (res.ok ? res.json() : null))
             .then((json) => {
+              if (json?.account?.username) {
+                setIgAccount({
+                  username: json.account.username,
+                  igUserId: json.account.igUserId || "",
+                });
+              }
               if (Array.isArray(json?.reels) && json.reels.length > 0) {
                 setMediaList(json.reels);
                 setSelectedMediaId((prev) => prev || json.reels[0].id);
@@ -213,7 +219,7 @@ export default function AutoDmPage() {
               json.leads.map((l: any) => ({
                 email: l.email,
                 username: l.igUsername || l.name?.replace(/^@/, ""),
-                igUserId: "17841453478293915",
+                igUserId: l.igUserId || "",
                 buyerIgId: l.id,
                 ruleId: "rule_sp_trip",
                 source: l.primarySource || "Instagram AutoDM",
@@ -424,7 +430,7 @@ export default function AutoDmPage() {
       const res = await fetch("/v1/ig/webhook/test-event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword: "TRIP", username: "jinbandhan_traveller" }),
+        body: JSON.stringify({ keyword: "TRIP", username: "test_follower" }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -553,6 +559,51 @@ export default function AutoDmPage() {
           </button>
         </div>
       </div>
+
+      {/* Instagram Disconnected Notice */}
+      {!igAccount.username && (
+        <div
+          style={{
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: "14px",
+            padding: "16px 20px",
+            marginBottom: "20px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ fontSize: "1.4rem" }}>📸</span>
+            <div>
+              <div style={{ fontWeight: 700, color: "#92400e", fontSize: "0.92rem" }}>
+                No Instagram Account Connected
+              </div>
+              <div style={{ color: "#b45309", fontSize: "0.82rem", marginTop: "2px" }}>
+                Connect your Instagram Creator or Business account to activate automated comment-to-DM triggers and select live reels.
+              </div>
+            </div>
+          </div>
+          <Link
+            href="/connect"
+            style={{
+              padding: "9px 18px",
+              borderRadius: "10px",
+              background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+              color: "#ffffff",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              textDecoration: "none",
+              boxShadow: "0 2px 8px rgba(220, 39, 67, 0.3)",
+            }}
+          >
+            Connect Instagram (Meta OAuth) →
+          </Link>
+        </div>
+      )}
 
       {/* TOP BANNER: Lead Qualifier Agent matching Screenshot 2 */}
       {showBanner && (

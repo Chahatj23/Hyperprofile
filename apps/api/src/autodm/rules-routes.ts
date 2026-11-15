@@ -28,7 +28,7 @@ function resolveRulesFile(): string {
   return local;
 }
 
-function getConnectedIgUserId(): string {
+function getConnectedIgUserId(): string | null {
   try {
     const file = resolveAccountFile();
     if (fs.existsSync(file)) {
@@ -38,7 +38,7 @@ function getConnectedIgUserId(): string {
   } catch {
     // ignore
   }
-  return "17841453478293915";
+  return null;
 }
 
 function loadDiskRules(): Array<any> {
@@ -101,6 +101,16 @@ export function registerRulesRoutes(
     const session = requireSession(req, reply);
     if (!session) return;
 
+    let callerIgUserId: string | null = null;
+    if (session.creatorId) {
+      try {
+        const acc = (
+          await deps.db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+        )[0];
+        if (acc?.igUserId) callerIgUserId = acc.igUserId;
+      } catch {}
+    }
+
     const parsed = createRuleSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -110,7 +120,14 @@ export function registerRulesRoutes(
       });
     }
     const body = parsed.data;
-    const igUserId = body.igUserId || getConnectedIgUserId();
+    const igUserId = callerIgUserId || body.igUserId;
+
+    if (!igUserId) {
+      return reply.code(400).send({
+        code: "no_instagram_account",
+        message: "Please connect your Instagram account first before creating AutoDM rules.",
+      });
+    }
 
     const ruleRecord = {
       id: `rule_${crypto.randomUUID().slice(0, 8)}`,
@@ -160,8 +177,21 @@ export function registerRulesRoutes(
     const session = requireSession(req, reply);
     if (!session) return;
 
-    const q = req.query as { igUserId?: string };
-    const igUserId = q.igUserId || getConnectedIgUserId();
+    let callerIgUserId: string | null = null;
+    if (session.creatorId) {
+      try {
+        const acc = (
+          await deps.db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+        )[0];
+        if (acc?.igUserId) callerIgUserId = acc.igUserId;
+      } catch {}
+    }
+
+    if (!callerIgUserId) {
+      return { data: [], connected: false };
+    }
+
+    const igUserId = callerIgUserId;
 
     // 1. Fetch DB rules first (cloud truth on Render)
     try {
@@ -170,7 +200,7 @@ export function registerRulesRoutes(
         .from(automationRules)
         .where(eq(automationRules.igUserId, igUserId));
       if (dbRules && dbRules.length > 0) {
-        return { data: dbRules };
+        return { data: dbRules, connected: true };
       }
     } catch {
       // fallback
@@ -178,8 +208,8 @@ export function registerRulesRoutes(
 
     // 2. Fallback to disk rules
     const disk = loadDiskRules();
-    const filtered = disk.filter((r) => !r.igUserId || r.igUserId === igUserId);
-    return { data: filtered };
+    const filtered = disk.filter((r) => r.igUserId === igUserId);
+    return { data: filtered, connected: true };
   });
 
   async function resolveCallerIgUserId(creatorId?: string): Promise<string | null> {
@@ -193,8 +223,7 @@ export function registerRulesRoutes(
         // fallback
       }
     }
-    const fileIgUserId = getConnectedIgUserId();
-    return fileIgUserId || null;
+    return null;
   }
 
   app.patch("/v1/ig/rules/:id", async (req: FastifyRequest, reply: FastifyReply) => {

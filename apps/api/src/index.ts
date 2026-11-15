@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import Fastify, { type FastifyRequest, type FastifyReply } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
-import { desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { automationEvents, buyers, createDb, creators, igAccounts, pageEvents, users } from "@hyperprofile/db";
 import {
   buildAuthorizeUrl,
@@ -28,7 +28,7 @@ import {
   type PaymentProvider,
 } from "@hyperprofile/payments";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
-import { getSession } from "./auth/session.js";
+import { getSession, setSessionCookie, signSession } from "./auth/session.js";
 import { registerCreatorRoutes } from "./routes/creator-routes.js";
 import { registerProductsRoutes } from "./routes/products-routes.js";
 import { registerCheckoutRoutes } from "./routes/checkout-routes.js";
@@ -282,9 +282,11 @@ function loadRealAccountFromFile(): Record<string, any> | null {
 app.get("/v1/health", async () => ({ ok: true, version: "v1" }));
 
 app.get("/v1/auth/instagram/start", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
   const statePayload = JSON.stringify({
     n: crypto.randomUUID(),
     t: Date.now(),
+    creatorId: session?.creatorId ?? null,
   });
   const state = signState(statePayload, env.SESSION_SECRET);
   reply.setCookie("ig_oauth_state", state, {
@@ -330,16 +332,21 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
     logger.warn("instagram oauth state HMAC signature mismatch");
     return reply.redirect(`${redirectOrigin}/connect?error=invalid_state`);
   }
+  let stateCreatorId: string | null = null;
   try {
-    const payload = JSON.parse(verifiedState) as { t?: number };
+    const payload = JSON.parse(verifiedState) as { t?: number; creatorId?: string | null };
     if (!payload.t || Date.now() - payload.t > 15 * 60 * 1000) {
       logger.warn("instagram oauth state expired");
       return reply.redirect(`${redirectOrigin}/connect?error=state_expired`);
     }
+    stateCreatorId = payload.creatorId ?? null;
   } catch {
     logger.warn("instagram oauth state payload malformed");
     return reply.redirect(`${redirectOrigin}/connect?error=invalid_state`);
   }
+
+  const session = getSession(req, env.SESSION_SECRET);
+  const targetCreatorId = stateCreatorId || session?.creatorId || null;
 
   try {
     const token = await exchangeCodeForToken(
@@ -366,22 +373,27 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
     const expiresAt =
       token.expiresIn != null ? new Date(Date.now() + token.expiresIn * 1000) : null;
 
-    // Save to local disk store so live real credentials survive even if Docker Postgres is offline
-    const realRecord = {
-      id: `ig_${profile.id}`,
-      igUserId: profile.id,
-      username: profile.username,
-      name: profile.name ?? profile.username,
-      profilePictureUrl: profile.profilePictureUrl ?? null,
-      accountType: profile.accountType ?? "BUSINESS",
-      accessTokenEncrypted: encrypted,
-      tokenExpiresAt: expiresAt?.toISOString() ?? null,
-      createdAt: new Date().toISOString(),
-      rawProfile: profile.raw,
-    };
-    saveRealAccountToFile(realRecord);
+    // Prevent Account Hijacking / Reassignment:
+    // If account already exists in DB linked to a DIFFERENT creator, reject silently stealing it!
+    const existing = (
+      await db.select().from(igAccounts).where(eq(igAccounts.igUserId, profile.id)).limit(1)
+    )[0];
 
-    try {
+    if (existing?.creatorId && targetCreatorId && existing.creatorId !== targetCreatorId) {
+      logger.warn("instagram account already linked to another creator", {
+        igUserId: profile.id,
+        existingCreatorId: existing.creatorId,
+        targetCreatorId,
+      });
+      return reply.redirect(
+        `${redirectOrigin}/connect?error=${encodeURIComponent(
+          "This Instagram account is already connected to another creator profile. Please disconnect it first."
+        )}`,
+      );
+    }
+
+    let creatorId = targetCreatorId;
+    if (!creatorId) {
       const email = `ig_${profile.username}@hyperprofile.local`;
       let user = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
       if (!user) {
@@ -409,52 +421,70 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
           .returning();
         creator = inserted[0]!;
       }
+      creatorId = creator.id;
+    }
 
-      let subscribedAt: Date | null = null;
-      try {
-        await subscribeIgWebhooks(profile.id, token.accessToken, {
-          graphVersion: env.META_GRAPH_VERSION,
-        });
-        subscribedAt = new Date();
-      } catch (subErr) {
-        logger.warn("instagram webhook subscribe failed after connect", {
-          err: subErr instanceof Error ? subErr.message : String(subErr),
-        });
-      }
-
-      await db
-        .insert(igAccounts)
-        .values({
-          creatorId: creator.id,
-          igUserId: profile.id,
-          username: profile.username,
-          accessTokenEncrypted: encrypted,
-          tokenExpiresAt: expiresAt,
-          subscribedAt,
-          reauthRequiredAt: null,
-          scopes: ["instagram_basic", "instagram_manage_comments", "instagram_manage_messages"],
-          rawProfile: profile.raw,
-        })
-        .onConflictDoUpdate({
-          target: igAccounts.igUserId,
-          set: {
-            username: profile.username,
-            accessTokenEncrypted: encrypted,
-            tokenExpiresAt: expiresAt,
-            rawProfile: profile.raw,
-            updatedAt: new Date(),
-            reauthRequiredAt: null,
-            ...(subscribedAt ? { subscribedAt } : {}),
-          },
-        });
-    } catch (dbErr) {
-      logger.warn("database sync skipped (db offline, saved to disk store)", {
-        err: dbErr instanceof Error ? dbErr.message : String(dbErr),
+    let subscribedAt: Date | null = null;
+    try {
+      await subscribeIgWebhooks(profile.id, token.accessToken, {
+        graphVersion: env.META_GRAPH_VERSION,
+      });
+      subscribedAt = new Date();
+    } catch (subErr) {
+      logger.warn("instagram webhook subscribe failed after connect", {
+        err: subErr instanceof Error ? subErr.message : String(subErr),
       });
     }
 
+    await db
+      .insert(igAccounts)
+      .values({
+        creatorId: creatorId,
+        igUserId: profile.id,
+        username: profile.username,
+        accessTokenEncrypted: encrypted,
+        tokenExpiresAt: expiresAt,
+        subscribedAt,
+        reauthRequiredAt: null,
+        scopes: ["instagram_basic", "instagram_manage_comments", "instagram_manage_messages"],
+        rawProfile: profile.raw,
+      })
+      .onConflictDoUpdate({
+        target: igAccounts.igUserId,
+        set: {
+          creatorId: creatorId,
+          username: profile.username,
+          accessTokenEncrypted: encrypted,
+          tokenExpiresAt: expiresAt,
+          rawProfile: profile.raw,
+          updatedAt: new Date(),
+          reauthRequiredAt: null,
+          ...(subscribedAt ? { subscribedAt } : {}),
+        },
+      });
+
+    // Ensure session is set for the connected creator
+    const creatorUserRow = (
+      await db.select().from(creators).where(eq(creators.id, creatorId)).limit(1)
+    )[0];
+    const userRow = creatorUserRow
+      ? (await db.select().from(users).where(eq(users.id, creatorUserRow.userId)).limit(1))[0]
+      : null;
+    if (userRow) {
+      const sessionToken = signSession(
+        {
+          userId: userRow.id,
+          email: userRow.email,
+          creatorId,
+          ...(creatorUserRow?.slug ? { slug: creatorUserRow.slug } : {}),
+        },
+        env.SESSION_SECRET,
+      );
+      setSessionCookie(reply, sessionToken, env.WEB_ORIGIN.startsWith("https"));
+    }
+
     reply.clearCookie("ig_oauth_state", { path: "/" });
-    logger.info("real instagram account connected", { igUserId: profile.id, username: profile.username });
+    logger.info("real instagram account connected", { igUserId: profile.id, username: profile.username, creatorId });
     return reply.redirect(
       `${redirectOrigin}/connect?ok=1&username=${encodeURIComponent(profile.username)}`,
     );
@@ -483,13 +513,29 @@ app.get("/api/webhooks/instagram", igWebhooks.verifyGet);
 app.post("/api/webhooks/instagram", igWebhooks.receivePost);
 
 /** Dynamic webhook & active poller information for dashboard status. */
-app.get("/v1/ig/webhook-info", async () => {
+app.get("/v1/ig/webhook-info", async (req) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  let connectedAccount: string | null = null;
+  let igUserId: string | null = null;
+
+  if (session?.creatorId) {
+    try {
+      const acct = (
+        await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+      )[0];
+      if (acct) {
+        connectedAccount = acct.username;
+        igUserId = acct.igUserId;
+      }
+    } catch {}
+  }
+
   const tunnelUrl = process.env.TUNNEL_URL || "https://telecharger-incoming-icon-filled.trycloudflare.com";
   return {
     webhookUrl: `${tunnelUrl}/webhooks/instagram`,
     verifyToken: env.META_WEBHOOK_VERIFY_TOKEN,
-    connectedAccount: "jinbandhan",
-    igUserId: "17841453478293915",
+    connectedAccount,
+    igUserId,
     subscribedFields: ["comments", "messages", "messaging_postbacks"],
     isHealthy: true,
     dualIngestion: {
@@ -504,15 +550,26 @@ app.get("/v1/ig/poller-status", async () => getPollerStatus());
 
 /** 1-Click test event to verify end-to-end AutoDM pipeline without manual data entry. */
 app.post("/v1/ig/webhook/test-event", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  let targetIgId = "test_ig_account";
+  if (session?.creatorId) {
+    try {
+      const acct = (
+        await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+      )[0];
+      if (acct?.igUserId) targetIgId = acct.igUserId;
+    } catch {}
+  }
+
   const body = (req.body ?? {}) as { keyword?: string; username?: string };
   const keyword = body.keyword || "TRIP";
-  const commenter = body.username || "jinbandhan_traveller";
+  const commenter = body.username || "test_commenter";
 
   const simulatedPayload = {
     object: "instagram",
     entry: [
       {
-        id: "17841453478293915",
+        id: targetIgId,
         time: Date.now(),
         changes: [
           {
@@ -561,17 +618,19 @@ app.get("/v1/ig/accounts", async (req, reply) => {
   }
 
   try {
-    const rows = await db
-      .select({
-        id: igAccounts.id,
-        igUserId: igAccounts.igUserId,
-        username: igAccounts.username,
-        tokenExpiresAt: igAccounts.tokenExpiresAt,
-        createdAt: igAccounts.createdAt,
-      })
-      .from(igAccounts)
-      .where(session.creatorId ? eq(igAccounts.creatorId, session.creatorId) : undefined)
-      .limit(50);
+    const rows = session.creatorId
+      ? await db
+          .select({
+            id: igAccounts.id,
+            igUserId: igAccounts.igUserId,
+            username: igAccounts.username,
+            tokenExpiresAt: igAccounts.tokenExpiresAt,
+            createdAt: igAccounts.createdAt,
+          })
+          .from(igAccounts)
+          .where(eq(igAccounts.creatorId, session.creatorId))
+          .limit(50)
+      : [];
     return { data: rows };
   } catch (err) {
     logger.warn("database query failed for ig_accounts", { err: String(err) });
@@ -583,7 +642,7 @@ app.get("/v1/ig/accounts", async (req, reply) => {
 /** Live Instagram profile + media + insights (token never returned). */
 app.get("/v1/ig/accounts/:id/overview", async (req, reply) => {
   const session = getSession(req, env.SESSION_SECRET);
-  if (!session) {
+  if (!session?.creatorId) {
     return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
   }
 
@@ -601,7 +660,11 @@ app.get("/v1/ig/accounts/:id/overview", async (req, reply) => {
   } | null = null;
   try {
     const row = (
-      await db.select().from(igAccounts).where(eq(igAccounts.id, id)).limit(1)
+      await db
+        .select()
+        .from(igAccounts)
+        .where(and(eq(igAccounts.id, id), eq(igAccounts.creatorId, session.creatorId)))
+        .limit(1)
     )[0];
     if (row) {
       account = {
@@ -614,23 +677,7 @@ app.get("/v1/ig/accounts/:id/overview", async (req, reply) => {
       };
     }
   } catch (err) {
-    logger.warn("db accounts query by id failed, checking disk store", { err: String(err) });
-  }
-
-  if (!account) {
-    const saved = loadRealAccountFromFile();
-    if (saved && (saved.id === id || saved.igUserId === id)) {
-      account = {
-        id: saved.id,
-        igUserId: saved.igUserId,
-        username: saved.username,
-        name: saved.name,
-        accountType: saved.accountType,
-        profilePictureUrl: saved.profilePictureUrl,
-        accessTokenEncrypted: saved.accessTokenEncrypted,
-        createdAt: new Date(saved.createdAt),
-      };
-    }
+    logger.warn("db accounts query by id failed", { err: String(err) });
   }
 
   if (!account) {
@@ -662,27 +709,32 @@ app.get("/v1/ig/accounts/:id/overview", async (req, reply) => {
       linkedAt: account.createdAt instanceof Date ? account.createdAt.toISOString() : String(account.createdAt),
       profile: {
         id: account.igUserId,
-        username: account.username || "jinbandhan",
-        name: account.name || account.username || "jinbandhan",
+        username: account.username || "",
+        name: account.name || account.username || "",
         biography: null,
         website: null,
         profilePictureUrl: account.profilePictureUrl || null,
-        followersCount: 1,
-        followsCount: 2,
+        followersCount: 0,
+        followsCount: 0,
         mediaCount: 0,
         accountType: account.accountType || "BUSINESS",
       },
       media: [],
       insights: [],
       warnings: [
-        `Meta Graph API (v21.0): ${message}. In Development Mode, ensure @${account.username || "jinbandhan"} has accepted the Instagram Tester invite or completed Meta App Checkup.`,
+        `Meta Graph API (v21.0): ${message}. In Development Mode, ensure @${account.username || "your account"} has accepted the Instagram Tester invite or completed Meta App Checkup.`,
       ],
     };
   }
 });
 
-/** Live overview for the first linked real account. */
-app.get("/v1/ig/overview", async (_req, reply) => {
+/** Live overview for the current creator's linked real account. */
+app.get("/v1/ig/overview", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session?.creatorId) {
+    return reply.code(401).send({ code: "unauthorized", message: "Creator login required" });
+  }
+
   let account: {
     id: string;
     igUserId: string;
@@ -694,7 +746,13 @@ app.get("/v1/ig/overview", async (_req, reply) => {
     createdAt: Date;
   } | null = null;
   try {
-    const row = (await db.select().from(igAccounts).limit(1))[0];
+    const row = (
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, session.creatorId))
+        .limit(1)
+    )[0];
     if (row) {
       account = {
         id: row.id,
@@ -705,29 +763,13 @@ app.get("/v1/ig/overview", async (_req, reply) => {
       };
     }
   } catch (err) {
-    logger.warn("db overview query failed, trying disk store", { err: String(err) });
-  }
-
-  if (!account) {
-    const saved = loadRealAccountFromFile();
-    if (saved) {
-      account = {
-        id: saved.id,
-        igUserId: saved.igUserId,
-        username: saved.username,
-        name: saved.name,
-        accountType: saved.accountType,
-        profilePictureUrl: saved.profilePictureUrl,
-        accessTokenEncrypted: saved.accessTokenEncrypted,
-        createdAt: new Date(saved.createdAt),
-      };
-    }
+    logger.warn("db overview query failed", { err: String(err) });
   }
 
   if (!account) {
     return reply.code(404).send({
       code: "no_account",
-      message: "No real Instagram account connected yet. Please connect via Meta Business Login.",
+      message: "No Instagram account connected yet. Please connect via /connect",
     });
   }
 
@@ -750,20 +792,20 @@ app.get("/v1/ig/overview", async (_req, reply) => {
       linkedAt: account.createdAt instanceof Date ? account.createdAt.toISOString() : String(account.createdAt),
       profile: {
         id: account.igUserId,
-        username: account.username || "jinbandhan",
-        name: account.name || account.username || "jinbandhan",
+        username: account.username || "",
+        name: account.name || account.username || "",
         biography: null,
         website: null,
         profilePictureUrl: account.profilePictureUrl || null,
-        followersCount: 1,
-        followsCount: 2,
+        followersCount: 0,
+        followsCount: 0,
         mediaCount: 0,
         accountType: account.accountType || "BUSINESS",
       },
       media: [],
       insights: [],
       warnings: [
-        `Meta Graph API (v21.0): ${message}. In Development Mode, ensure @${account.username || "jinbandhan"} has accepted the Instagram Tester invite or completed Meta App Checkup.`,
+        `Meta Graph API (v21.0): ${message}. In Development Mode, ensure @${account.username || "your account"} has accepted the Instagram Tester invite or completed Meta App Checkup.`,
       ],
     };
   }
@@ -772,59 +814,58 @@ app.get("/v1/ig/overview", async (_req, reply) => {
 // In-memory cache for reels to guarantee sub-millisecond response times
 const reelsCache = new Map<string, { data: any[]; timestamp: number }>();
 
-/** Dedicated Instagram Reels list strictly from the connected real account. */
+/** Dedicated Instagram Reels list strictly from the authenticated creator's connected account. */
 app.get("/v1/ig/reels", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session?.creatorId) {
+    return reply.send({
+      ok: false,
+      connected: false,
+      error: "Authentication required",
+      reels: [],
+    });
+  }
+
   const query = req.query as { limit?: string };
   const limit = Math.min(Number(query.limit) || 25, 50);
 
-  // 1. Instant account resolution from local disk store (< 1ms)
   let account: { id: string; igUserId: string; username?: string; accessTokenEncrypted: string; createdAt: Date } | null = null;
-  const saved = loadRealAccountFromFile();
-  if (saved) {
-    account = {
-      id: saved.id,
-      igUserId: saved.igUserId,
-      username: saved.username,
-      accessTokenEncrypted: saved.accessTokenEncrypted,
-      createdAt: new Date(saved.createdAt),
-    };
-  }
-
-  if (!account) {
-    try {
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 120));
-      const row = (await Promise.race([db.select().from(igAccounts).limit(1), timeout]))[0];
-      if (row) {
-        account = {
-          id: row.id,
-          igUserId: row.igUserId,
-          username: row.username,
-          accessTokenEncrypted: row.accessTokenEncrypted,
-          createdAt: row.createdAt,
-        };
-      }
-    } catch {
-      // fallback
+  try {
+    const row = (
+      await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+    )[0];
+    if (row) {
+      account = {
+        id: row.id,
+        igUserId: row.igUserId,
+        username: row.username,
+        accessTokenEncrypted: row.accessTokenEncrypted,
+        createdAt: row.createdAt,
+      };
     }
+  } catch (err) {
+    logger.warn("db reels account query failed", { err: String(err) });
   }
 
   if (!account) {
     return reply.send({
       ok: false,
+      connected: false,
       error: "No connected Instagram account found. Please connect via /connect",
       reels: [],
     });
   }
 
-  // 2. Check in-memory cache (2-minute TTL for instant loads)
+  // Check in-memory cache partitioned per account (2-minute TTL for instant loads)
   const cacheKey = `${account.igUserId}_${limit}`;
   const cached = reelsCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 120_000) {
     return reply.send({
       ok: true,
+      connected: true,
       account: {
         id: account.id,
-        username: account.username || "jinbandhan",
+        username: account.username,
         igUserId: account.igUserId,
       },
       isLive: true,
@@ -852,7 +893,7 @@ app.get("/v1/ig/reels", async (req, reply) => {
     reelsCache.set(cacheKey, { data: liveReels, timestamp: Date.now() });
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err);
-    logger.warn("Meta Graph reels fetch failed", { err: fetchError });
+    logger.warn("Meta Graph reels fetch failed", { err: fetchError, igUserId: account.igUserId });
     if (cached) {
       liveReels = cached.data;
       isLive = true;
@@ -861,9 +902,10 @@ app.get("/v1/ig/reels", async (req, reply) => {
 
   return reply.send({
     ok: isLive,
+    connected: true,
     account: {
       id: account.id,
-      username: account.username || "jinbandhan",
+      username: account.username,
       igUserId: account.igUserId,
     },
     isLive,
@@ -874,14 +916,26 @@ app.get("/v1/ig/reels", async (req, reply) => {
   });
 });
 
-/** All Instagram Media strictly from the connected real account. */
+/** All Instagram Media strictly from the authenticated creator's connected account. */
 app.get("/v1/ig/media", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session?.creatorId) {
+    return reply.send({
+      ok: false,
+      connected: false,
+      error: "Authentication required",
+      media: [],
+    });
+  }
+
   const query = req.query as { limit?: string };
   const limit = Math.min(Number(query.limit) || 30, 60);
 
   let account: { id: string; igUserId: string; username?: string; accessTokenEncrypted: string; createdAt: Date } | null = null;
   try {
-    const row = (await db.select().from(igAccounts).limit(1))[0];
+    const row = (
+      await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+    )[0];
     if (row) {
       account = {
         id: row.id,
@@ -892,25 +946,13 @@ app.get("/v1/ig/media", async (req, reply) => {
       };
     }
   } catch (err) {
-    logger.warn("db media query failed, checking disk store", { err: String(err) });
-  }
-
-  if (!account) {
-    const saved = loadRealAccountFromFile();
-    if (saved) {
-      account = {
-        id: saved.id,
-        igUserId: saved.igUserId,
-        username: saved.username,
-        accessTokenEncrypted: saved.accessTokenEncrypted,
-        createdAt: new Date(saved.createdAt),
-      };
-    }
+    logger.warn("db media query failed", { err: String(err) });
   }
 
   if (!account) {
     return reply.send({
       ok: false,
+      connected: false,
       error: "No connected Instagram account found. Please connect via /connect",
       media: [],
     });
@@ -930,14 +972,15 @@ app.get("/v1/ig/media", async (req, reply) => {
     isLive = true;
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err);
-    logger.warn("Meta Graph media fetch failed", { err: fetchError });
+    logger.warn("Meta Graph media fetch failed", { err: fetchError, igUserId: account.igUserId });
   }
 
   return reply.send({
     ok: isLive,
+    connected: true,
     account: {
       id: account.id,
-      username: account.username || "jinbandhan",
+      username: account.username,
       igUserId: account.igUserId,
     },
     isLive,
@@ -948,52 +991,48 @@ app.get("/v1/ig/media", async (req, reply) => {
   });
 });
 
-/** Real activity feed for connected Instagram account with server-side filtering support. */
+/** Real activity feed strictly for the authenticated creator's connected Instagram account. */
 app.get("/v1/ig/activity", async (req, reply) => {
-  const query = req.query as {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session?.creatorId) {
+    return reply.code(401).send({
+      code: "unauthorized",
+      message: "Authentication required",
+      activities: [],
+    });
+  }
+
+  const query = (req.query ?? {}) as {
     type?: string;
     search?: string;
     limit?: string;
   };
 
   let account: { id: string; igUserId: string; username?: string; accessTokenEncrypted: string; createdAt: Date } | null = null;
-  const saved = loadRealAccountFromFile();
-  if (saved) {
-    account = {
-      id: saved.id,
-      igUserId: saved.igUserId,
-      username: saved.username,
-      accessTokenEncrypted: saved.accessTokenEncrypted,
-      createdAt: new Date(saved.createdAt),
-    };
-  }
-
-  if (!account) {
-    try {
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 120));
-      const row = (await Promise.race([db.select().from(igAccounts).limit(1), timeout]))[0];
-      if (row) {
-        account = {
-          id: row.id,
-          igUserId: row.igUserId,
-          username: row.username,
-          accessTokenEncrypted: row.accessTokenEncrypted,
-          createdAt: row.createdAt,
-        };
-      }
-    } catch {
-      // fallback
+  try {
+    const row = (
+      await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+    )[0];
+    if (row) {
+      account = {
+        id: row.id,
+        igUserId: row.igUserId,
+        username: row.username,
+        accessTokenEncrypted: row.accessTokenEncrypted,
+        createdAt: row.createdAt,
+      };
     }
+  } catch (err) {
+    logger.warn("db activity account query failed", { err: String(err) });
   }
 
   if (!account) {
-    return reply.code(404).send({
-      code: "no_account",
-      message: "No real Instagram account connected yet.",
+    return reply.send({
+      activities: [],
     });
   }
 
-  const username = account.username || "jinbandhan";
+  const username = account.username || "creator";
   const now = new Date();
 
   // Strictly real account activities from Meta Webhooks & platform dispatches (zero dummy items)
@@ -1254,9 +1293,9 @@ app.post("/v1/ig/autodm/test-conversation", async (req, reply) => {
     dispatchRealDm?: boolean;
   };
 
-  const igUserId = body.igUserId || "17841453478293915";
+  const igUserId = body.igUserId || "test_ig_user";
   const buyerIgId = body.buyerIgId || "buyer_demo_user_101";
-  const username = body.username || "chahat_creator";
+  const username = body.username || "creator_user";
   const resourceLink = body.resourceLink || "http://localhost:3000/checkout/p_1";
 
   if (body.action === "start_follow" || body.action === "start_email") {
@@ -1274,7 +1313,7 @@ app.post("/v1/ig/autodm/test-conversation", async (req, reply) => {
     });
 
     const initialDm = askToFollow
-      ? `Hey @${username}! 👋 Thanks for checking out our reel! To unlock your exclusive resource, make sure you're following @jinbandhan first.\n\nOnce followed, reply "YES" or send your email address right here!`
+      ? `Hey @${username}! 👋 Thanks for checking out our reel! To unlock your exclusive resource, make sure you're following our profile first.\n\nOnce followed, reply "YES" or send your email address right here!`
       : `Hey @${username}! 🚀 What's your best email address to send your instant download and bonus templates?`;
 
     return {

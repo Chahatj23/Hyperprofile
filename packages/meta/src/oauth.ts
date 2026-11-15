@@ -152,12 +152,8 @@ export async function fetchInstagramProfile(
   const base = `https://graph.facebook.com/${graphVersion}`;
   const attempts: Record<string, unknown>[] = [];
 
-  // Direct check for candidate Instagram account IDs (verified Jinbandhan IG user and Page asset)
-  const candidateIds = [
-    opts.knownInstagramId,
-    "17841453478293915",
-    "1455386567656707",
-  ].filter(Boolean) as string[];
+  // Direct check for candidate Instagram account ID if explicitly specified
+  const candidateIds = [opts.knownInstagramId].filter(Boolean) as string[];
   for (const cid of candidateIds) {
     const json = await graphGet(
       `${base}/${cid}`,
@@ -168,13 +164,13 @@ export async function fetchInstagramProfile(
     const profile = profileFromIgNode(json, json);
     if (profile) return profile;
 
-    if (!json.error) {
+    if (!json.error && json.id) {
       const igAcc = json.instagram_business_account as Record<string, unknown> | undefined;
-      const resolvedId = String(igAcc?.id ?? (cid === "1455386567656707" ? "17841453478293915" : json.id));
+      const resolvedId = String(igAcc?.id ?? json.id);
       const resProfile: IgProfile = {
         id: resolvedId,
-        username: String(igAcc?.username ?? json.username ?? json.name ?? "jinbandhan"),
-        name: String(igAcc?.name ?? json.name ?? "jinbandhan"),
+        username: String(igAcc?.username ?? json.username ?? json.name ?? "creator"),
+        name: String(igAcc?.name ?? json.name ?? json.username ?? "Creator"),
         accountType: "BUSINESS",
         raw: json,
       };
@@ -297,17 +293,7 @@ export async function fetchInstagramProfile(
     if (profile) return profile;
   }
 
-  if (candidateIds.includes("1455386567656707")) {
-    return {
-      id: "1455386567656707",
-      username: "jinbandhan",
-      name: "jinbandhan",
-      accountType: "BUSINESS",
-      raw: { assetId: "1455386567656707", username: "jinbandhan", source: "meta_business_suite", attempts },
-    };
-  }
-
   throw new Error(
-    `No Instagram professional account found on this login. Attempts: ${JSON.stringify(attempts).slice(0, 2000)}`,
+    `No Instagram professional account found on this login. Please ensure your Instagram profile is a Creator or Business account and linked to your Facebook Page.`,
   );
 }

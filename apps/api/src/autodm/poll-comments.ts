@@ -70,7 +70,8 @@ export async function pollActiveCommentsOnce(cfg: CommentPollerConfig): Promise<
 
   // 1. Resolve Access Token directly from DB first (production cloud source of truth)
   let accessToken: string | null = null;
-  let defaultIgUserId = "17841453478293915";
+  let defaultIgUserId: string | null = null;
+  let defaultUsername: string | null = null;
 
   try {
     const acctRows = await cfg.db
@@ -83,6 +84,7 @@ export async function pollActiveCommentsOnce(cfg: CommentPollerConfig): Promise<
         try {
           accessToken = decryptAesGcm(acct.accessTokenEncrypted, cfg.tokenEncryptionKey);
           defaultIgUserId = acct.igUserId;
+          defaultUsername = acct.username;
           break;
         } catch {
           // continue
@@ -218,7 +220,10 @@ export async function pollActiveCommentsOnce(cfg: CommentPollerConfig): Promise<
         }
 
         // Never reply to the account's own comments
-        if (comment.from?.id === defaultIgUserId || comment.from?.username === "jinbandhan") {
+        if (
+          (defaultIgUserId && comment.from?.id === defaultIgUserId) ||
+          (defaultUsername && comment.from?.username?.toLowerCase() === defaultUsername.toLowerCase())
+        ) {
           continue;
         }
 
@@ -234,7 +239,7 @@ export async function pollActiveCommentsOnce(cfg: CommentPollerConfig): Promise<
           object: "instagram",
           entry: [
             {
-              id: defaultIgUserId,
+              ...(defaultIgUserId ? { id: defaultIgUserId } : {}),
               time: Math.floor(new Date(comment.timestamp || Date.now()).getTime() / 1000),
               changes: [
                 {

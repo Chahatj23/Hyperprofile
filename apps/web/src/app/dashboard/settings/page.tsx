@@ -213,7 +213,7 @@ export default function SettingsPage() {
         </div>
 
         <Link
-          href={`/${slug || "jinbandhan"}`}
+          href={`/${slug || "profile"}`}
           target="_blank"
           style={{
             display: "inline-flex",
@@ -396,40 +396,25 @@ export default function SettingsPage() {
                 Link your Instagram Professional account to activate AutoDM keyword triggers and live audience analytics.
               </p>
 
-              <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  disabled={linking}
-                  onClick={() => handleLinkAccount("jinbandhan")}
-                  style={{
-                    padding: "10px 18px",
-                    borderRadius: "10px",
-                    background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
-                    color: "#ffffff",
-                    border: "none",
-                    fontSize: "0.85rem",
-                    fontWeight: 700,
-                    cursor: linking ? "wait" : "pointer",
-                    boxShadow: "0 2px 8px rgba(220, 39, 67, 0.3)",
-                  }}
-                >
-                  {linking ? "Linking…" : "Link Verified @jinbandhan Account →"}
-                </button>
-
+              <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
                 <Link
                   href="/connect"
                   style={{
-                    padding: "10px 18px",
+                    padding: "11px 22px",
                     borderRadius: "10px",
-                    background: "#ffffff",
-                    border: "1px solid #cbd5e1",
-                    color: "#0f172a",
-                    fontSize: "0.85rem",
-                    fontWeight: 600,
+                    background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+                    color: "#ffffff",
+                    fontSize: "0.88rem",
+                    fontWeight: 700,
                     textDecoration: "none",
+                    boxShadow: "0 2px 8px rgba(220, 39, 67, 0.3)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
                   }}
                 >
-                  Connect Other Account (Meta OAuth) ↗
+                  <span>📸</span>
+                  <span>Connect Instagram Account (Meta OAuth) →</span>
                 </Link>
               </div>
             </div>
@@ -507,7 +492,7 @@ export default function SettingsPage() {
                   fontWeight: 800,
                 }}
               >
-                {displayName ? displayName.charAt(0).toUpperCase() : "J"}
+                {displayName ? displayName.charAt(0).toUpperCase() : "C"}
               </div>
             </div>
 
@@ -516,7 +501,7 @@ export default function SettingsPage() {
                 {displayName || "Creator"}
               </div>
               <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "2px" }}>
-                Instagram: <span style={{ fontWeight: 600, color: "#bc1888" }}>@{slug || "jinbandhan"}</span>
+                Instagram: <span style={{ fontWeight: 600, color: "#bc1888" }}>{igAccount?.username ? `@${igAccount.username}` : "Not Connected"}</span>
               </div>
             </div>
           </div>

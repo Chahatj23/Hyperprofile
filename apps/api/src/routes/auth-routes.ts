@@ -374,20 +374,32 @@ export function registerAuthRoutes(
     }
 
     const body = (req.body ?? {}) as { username?: string; igUserId?: string };
-    const username = body?.username?.trim().toLowerCase() || "jinbandhan";
+    const username = body?.username?.trim().toLowerCase();
+    const igUserId = body?.igUserId?.trim();
 
-    let ig = body.igUserId
-      ? (await db.select().from(igAccounts).where(eq(igAccounts.igUserId, body.igUserId)).limit(1))[0]
-      : (await db.select().from(igAccounts).where(eq(igAccounts.username, username)).limit(1))[0];
-
-    if (!ig) {
-      ig = (await db.select().from(igAccounts).limit(1))[0];
+    if (!username && !igUserId) {
+      return reply.code(400).send({
+        code: "missing_parameter",
+        message: "Instagram username or igUserId required to link account",
+      });
     }
+
+    let ig = igUserId
+      ? (await db.select().from(igAccounts).where(eq(igAccounts.igUserId, igUserId)).limit(1))[0]
+      : (await db.select().from(igAccounts).where(eq(igAccounts.username, username!)).limit(1))[0];
 
     if (!ig) {
       return reply.code(404).send({
         code: "account_not_found",
-        message: "No Instagram account found to connect. Please complete Meta OAuth first.",
+        message: "No matching Instagram account found. Please complete Meta OAuth first.",
+      });
+    }
+
+    // Prevent cross-creator account hijacking / silent reassignment
+    if (ig.creatorId && ig.creatorId !== session.creatorId) {
+      return reply.code(409).send({
+        code: "account_conflict",
+        message: "This Instagram account is already connected to another creator profile. Please disconnect it first.",
       });
     }
 

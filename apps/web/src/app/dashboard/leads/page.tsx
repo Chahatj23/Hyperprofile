@@ -211,7 +211,7 @@ export default function LeadsCrmPage() {
               {stats.autodmCapturedCount}
             </div>
             <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-              Captured via @jinbandhan
+              Captured via Instagram AutoDM
             </div>
           </div>
         </div>
