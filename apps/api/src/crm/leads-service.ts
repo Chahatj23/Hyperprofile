@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import {
   buyers,
   orders,
@@ -65,19 +65,32 @@ function readJsonFile<T>(filename: string): T[] {
  */
 export async function getUnifiedLeads(
   db: Db,
-  options?: {
+  options: {
     search?: string | undefined;
     source?: string | undefined;
     creatorId?: string | undefined;
-  },
+  } = {},
 ): Promise<{ leads: UnifiedLead[]; stats: LeadsStats }> {
   const leadsMap = new Map<string, UnifiedLead>();
 
-  // 1. Ingest Database Buyers & Orders if DB is reachable
+  // 1. Ingest Database Buyers & Orders with strict multi-tenant creator isolation (SEC-S1-03)
   try {
-    const allBuyers = await db.select().from(buyers);
-    const allOrders = await db.select().from(orders);
-    const allProducts = await db.select().from(products);
+    const creatorFilter = options.creatorId ? eq(orders.creatorId, options.creatorId) : undefined;
+    const allOrders = creatorFilter
+      ? await db.select().from(orders).where(creatorFilter)
+      : await db.select().from(orders);
+
+    const buyerIds = Array.from(new Set(allOrders.map((o) => o.buyerId)));
+    const allBuyers = options.creatorId
+      ? buyerIds.length > 0
+        ? await db.select().from(buyers).where(inArray(buyers.id, buyerIds))
+        : []
+      : await db.select().from(buyers);
+
+    const productFilter = options.creatorId ? eq(products.creatorId, options.creatorId) : undefined;
+    const allProducts = productFilter
+      ? await db.select().from(products).where(productFilter)
+      : await db.select().from(products);
 
     const productMap = new Map(allProducts.map((p) => [p.id, p.title]));
 
@@ -117,6 +130,7 @@ export async function getUnifiedLeads(
   const igLeads = readJsonFile<any>("real-ig-leads.json");
   for (const ig of igLeads) {
     if (!ig.email) continue;
+    if (options.creatorId && ig.creatorId && ig.creatorId !== options.creatorId) continue;
     const emailKey = ig.email.toLowerCase().trim();
     const existing = leadsMap.get(emailKey);
 
@@ -149,6 +163,7 @@ export async function getUnifiedLeads(
   // 3. Ingest VIP Telegram Community memberships (real-telegram-members.json)
   const tgMembers = readJsonFile<any>("real-telegram-members.json");
   for (const tg of tgMembers) {
+    if (options.creatorId && tg.creatorId && tg.creatorId !== options.creatorId) continue;
     const emailKey = (tg.buyerEmail || `tg_member_${tg.id}@telegram.org`).toLowerCase().trim();
     const existing = leadsMap.get(emailKey);
 
@@ -182,6 +197,7 @@ export async function getUnifiedLeads(
   // 4. Ingest 1:1 Consultation session bookings (real-session-bookings.json)
   const sessionBookingsDisk = readJsonFile<any>("real-session-bookings.json");
   for (const sb of sessionBookingsDisk) {
+    if (options.creatorId && sb.creatorId && sb.creatorId !== options.creatorId) continue;
     const emailKey = (sb.buyerEmail || `consultation_${sb.id}@meet.google.com`).toLowerCase().trim();
     const existing = leadsMap.get(emailKey);
 

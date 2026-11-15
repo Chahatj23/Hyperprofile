@@ -94,7 +94,12 @@ export function registerCheckoutRoutes(
           .limit(1)
       )[0];
 
-      if (offer && (!offer.validUntil || offer.validUntil >= new Date())) {
+      // SEC-S3-01: Enforce expiration and max-uses ceiling on coupon application
+      if (
+        offer &&
+        (!offer.validUntil || offer.validUntil >= new Date()) &&
+        (offer.maxUses === null || offer.usesCount < offer.maxUses)
+      ) {
         const disc = applyDiscount(
           product.pricePaise,
           offer.discountType as "percent" | "flat",
@@ -244,8 +249,30 @@ export function registerCheckoutRoutes(
       };
     }
 
+    // SEC-S1-02: Defensive integrity check on gatewayOrderId
+    // If order has an assigned gatewayOrderId, it MUST match the order and cannot be overridden by client
+    if (order.gatewayOrderId && body.gatewayOrderId && body.gatewayOrderId !== order.gatewayOrderId) {
+      logger.warn("payment verification gateway order id mismatch", {
+        orderId: order.id,
+        expectedGatewayOrderId: order.gatewayOrderId,
+        providedGatewayOrderId: body.gatewayOrderId,
+      });
+      return reply.code(400).send({
+        code: "order_mismatch",
+        message: "Gateway order ID does not match order record",
+      });
+    }
+
+    const expectedGatewayOrderId = order.gatewayOrderId ?? body.gatewayOrderId ?? "";
+    if (!expectedGatewayOrderId) {
+      return reply.code(400).send({
+        code: "invalid_order",
+        message: "No gateway order ID associated with this order",
+      });
+    }
+
     const isValid = paymentProvider.verifyPaymentSignature({
-      orderId: body.gatewayOrderId ?? order.gatewayOrderId ?? "",
+      orderId: expectedGatewayOrderId,
       paymentId: body.gatewayPaymentId,
       signature: body.signature,
     });

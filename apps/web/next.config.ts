@@ -13,6 +13,19 @@ const nextConfig: NextConfig = {
           { key: "X-XSS-Protection", value: "1; mode=block" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://cdn.jsdelivr.net",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "img-src 'self' data: blob: https://*.cdninstagram.com https://*.fbcdn.net https://images.unsplash.com https://*.rzp.io",
+              "font-src 'self' https://fonts.gstatic.com data:",
+              "connect-src 'self' http://127.0.0.1:4000 https://api.razorpay.com https://lumberjack.razorpay.com",
+              "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+              "frame-ancestors 'self'",
+            ].join("; "),
+          },
         ],
       },
     ];

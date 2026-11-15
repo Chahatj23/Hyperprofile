@@ -6,6 +6,7 @@ import {
   entitlements,
   invoices,
   ledgerEntries,
+  offers,
   orders,
   pageEvents,
   payments,
@@ -104,6 +105,20 @@ export async function finalizeOrderPayment(
     .update(orders)
     .set({ status: "paid", updatedAt: new Date() })
     .where(eq(orders.id, order.id));
+
+  // SEC-S3-01: Increment coupon uses count if offer was applied
+  if (order.offerId) {
+    await db
+      .update(offers)
+      .set({
+        usesCount: sql`${offers.usesCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(offers.id, order.offerId))
+      .catch((err) => {
+        logger.warn("failed to increment offer uses count", { offerId: order.offerId, err });
+      });
+  }
 
   // Record payment (idempotent on gatewayPaymentId)
   await db

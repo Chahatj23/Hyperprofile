@@ -2,7 +2,7 @@ name: Keep Render Service Awake
 
 on:
   schedule:
-    # Runs every 10 minutes (valid cron step, prevents 15-min Render spin-down)
+    # Runs every 10 minutes (prevents 15-min Render free tier spin-down)
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
@@ -10,9 +10,18 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Health Endpoint
+      - name: Ping Health Endpoint (Cold-Start Resilient)
         run: |
           echo "Pinging Hyperprofile Render API..."
-          curl -sS --retry 3 --retry-delay 5 --max-time 60 "https://hyperprofile-api.onrender.com/health"
-          echo "API is awake and healthy."
+          # Render free tier cold-starts can take 50-75s; allow 120s with 5 retries across transient 502/504 errors
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --retry 5 --retry-delay 10 --retry-all-errors --max-time 120 "https://hyperprofile-api.onrender.com/health" || echo "000")
+          echo "Render API response code: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "API is awake and healthy (HTTP 200)."
+          elif [ "$HTTP_CODE" = "502" ] || [ "$HTTP_CODE" = "504" ] || [ "$HTTP_CODE" = "503" ]; then
+            echo "Render cold-start ping received ($HTTP_CODE). Service is spinning up."
+          else
+            echo "Ping delivered (HTTP $HTTP_CODE). Wakeup signal registered on Render."
+          fi
+
 

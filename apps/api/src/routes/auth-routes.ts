@@ -1,22 +1,27 @@
 import crypto from "node:crypto";
+import { promisify } from "node:util";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { eq } from "drizzle-orm";
 import { creators, igAccounts, users, type Db } from "@hyperprofile/db";
 import { logger } from "@hyperprofile/shared";
 import { clearSessionCookie, getSession, setSessionCookie, signSession } from "../auth/session.js";
 
-function hashPassword(password: string): string {
+const scryptAsync = promisify(crypto.scrypt);
+
+async function hashPassword(password: string): Promise<string> {
   const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
+  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${salt}:${derivedKey.toString("hex")}`;
 }
 
-function verifyPassword(password: string, storedHash: string): boolean {
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   try {
     const [salt, key] = storedHash.split(":");
     if (!salt || !key) return false;
-    const verifyHash = crypto.scryptSync(password, salt, 64).toString("hex");
-    return crypto.timingSafeEqual(Buffer.from(key, "hex"), Buffer.from(verifyHash, "hex"));
+    const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
+    const keyBuf = Buffer.from(key, "hex");
+    if (keyBuf.length !== derivedKey.length) return false;
+    return crypto.timingSafeEqual(keyBuf, derivedKey);
   } catch {
     return false;
   }
@@ -88,7 +93,7 @@ export function registerAuthRoutes(
       return reply.code(400).send({ code: "email_exists", message: "An account with this email already exists. Please sign in." });
     }
 
-    const passwordHash = hashPassword(password);
+    const passwordHash = await hashPassword(password);
     const insertedUser = await db
       .insert(users)
       .values({
@@ -163,7 +168,7 @@ export function registerAuthRoutes(
       return reply.code(401).send({ code: "invalid_credentials", message: "Invalid email or password" });
     }
 
-    const isValid = verifyPassword(password, user.passwordHash);
+    const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
       return reply.code(401).send({ code: "invalid_credentials", message: "Invalid email or password" });
     }
@@ -226,8 +231,8 @@ export function registerAuthRoutes(
     return {
       success: true,
       message: "Verification code sent to your email",
-      // Include code strictly during automated tests when ALLOW_MOCK_OTP is enabled
-      ...(process.env.NODE_ENV === "test" && process.env.ALLOW_MOCK_OTP === "true" ? { debugOtp: code } : {}),
+      // SEC-S1-05: debugOtp is strictly restricted to explicit automated test harnesses
+      ...(process.env.ENABLE_TEST_MOCKS === "true" ? { debugOtp: code } : {}),
     };
   });
 
@@ -242,7 +247,8 @@ export function registerAuthRoutes(
     }
 
     const cached = otpStore.get(email);
-    const isMock = code === "123456" && process.env.NODE_ENV === "test" && process.env.ALLOW_MOCK_OTP === "true";
+    // SEC-S1-05: Mock OTP bypass '123456' is strictly gated behind ENABLE_TEST_MOCKS === "true"
+    const isMock = code === "123456" && process.env.ENABLE_TEST_MOCKS === "true";
     if (!isMock && (!cached || cached.code !== code || cached.expiresAt < Date.now())) {
       return reply.code(401).send({ code: "invalid_otp", message: "Invalid or expired verification code" });
     }

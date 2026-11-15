@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { automationRules, igAccounts, type Db } from "@hyperprofile/db";
 import { queueDepth } from "./queue.js";
@@ -182,6 +182,21 @@ export function registerRulesRoutes(
     return { data: filtered };
   });
 
+  async function resolveCallerIgUserId(creatorId?: string): Promise<string | null> {
+    if (creatorId) {
+      try {
+        const acc = (
+          await deps.db.select().from(igAccounts).where(eq(igAccounts.creatorId, creatorId)).limit(1)
+        )[0];
+        if (acc?.igUserId) return acc.igUserId;
+      } catch {
+        // fallback
+      }
+    }
+    const fileIgUserId = getConnectedIgUserId();
+    return fileIgUserId || null;
+  }
+
   app.patch("/v1/ig/rules/:id", async (req: FastifyRequest, reply: FastifyReply) => {
     const session = requireSession(req, reply);
     if (!session) return;
@@ -214,10 +229,18 @@ export function registerRulesRoutes(
     }
     const patch = body.data;
 
-    // Instant update on disk
+    // SEC-S1-04: Enforce object-level ownership check (IDOR protection)
+    const callerIgUserId = await resolveCallerIgUserId(session.creatorId);
     const disk = loadDiskRules();
     const idx = disk.findIndex((r) => r.id === id);
     if (idx !== -1) {
+      if (callerIgUserId && disk[idx].igUserId && disk[idx].igUserId !== callerIgUserId) {
+        return reply.code(403).send({
+          code: "forbidden",
+          message: "You do not have permission to modify this rule",
+        });
+      }
+
       disk[idx] = { ...disk[idx], ...patch, updatedAt: new Date().toISOString() };
       saveDiskRules(disk);
 
@@ -232,7 +255,11 @@ export function registerRulesRoutes(
           ...(patch.mediaId !== undefined ? { mediaId: patch.mediaId } : {}),
           updatedAt: new Date(),
         })
-        .where(eq(automationRules.id, id))
+        .where(
+          callerIgUserId
+            ? and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId))
+            : eq(automationRules.id, id),
+        )
         .catch(() => {});
 
       return { data: disk[idx] };
@@ -246,14 +273,32 @@ export function registerRulesRoutes(
 
     const { id } = req.params as { id: string };
 
+    // SEC-S1-04: Enforce object-level ownership check (IDOR protection)
+    const callerIgUserId = await resolveCallerIgUserId(session.creatorId);
+    const disk = loadDiskRules();
+    const rule = disk.find((r) => r.id === id);
+    if (!rule) {
+      return reply.code(404).send({ code: "not_found", message: "Rule not found" });
+    }
+    if (callerIgUserId && rule.igUserId && rule.igUserId !== callerIgUserId) {
+      return reply.code(403).send({
+        code: "forbidden",
+        message: "You do not have permission to delete this rule",
+      });
+    }
+
     // Instant delete from disk
-    const disk = loadDiskRules().filter((r) => r.id !== id);
-    saveDiskRules(disk);
+    const updatedDisk = disk.filter((r) => r.id !== id);
+    saveDiskRules(updatedDisk);
 
     // Background delete from DB
     deps.db
       .delete(automationRules)
-      .where(eq(automationRules.id, id))
+      .where(
+        callerIgUserId
+          ? and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId))
+          : eq(automationRules.id, id),
+      )
       .catch(() => {});
 
     return { ok: true };

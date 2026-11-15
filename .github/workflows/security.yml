@@ -1,0 +1,48 @@
+name: Security & Compliance CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Daily automated security audit at 02:00 UTC
+    - cron: "0 2 * * *"
+
+jobs:
+  security-audit:
+    name: Security Regression Tests & Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full git history for secret scanning
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Run Dedicated Security Regression Test Suite
+        env:
+          NODE_ENV: test
+          ENABLE_TEST_MOCKS: "true"
+        run: pnpm exec vitest run tests/security
+
+      - name: Run Production Dependency Vulnerability Audit
+        run: pnpm audit --prod --audit-level=high
+
+      - name: Git History Secrets Scanning
+        run: |
+          echo "Scanning recent commits for exposed credentials..."
+          ! git log -p -n 50 | grep -E "(rzp_live_[0-9a-zA-Z]{14,}|EAAB[0-9a-zA-Z]{50,})"

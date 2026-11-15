@@ -36,6 +36,13 @@
       "when": 1794067894759,
       "tag": "0004_amazing_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794748172451,
+      "tag": "0005_clammy_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }

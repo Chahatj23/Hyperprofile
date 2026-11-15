@@ -95,6 +95,11 @@ export default function AutoDmPage() {
   // Step 1: The Comment is on...
   const [scope, setScope] = useState<"specific" | "any" | "next">("specific");
   const [selectedMediaId, setSelectedMediaId] = useState<string>("");
+  const [reelFilter, setReelFilter] = useState<"all" | "reels" | "posts">("all");
+  const [reelSearch, setReelSearch] = useState<string>("");
+  const [syncingMedia, setSyncingMedia] = useState<boolean>(false);
+  const [manualMediaOpen, setManualMediaOpen] = useState<boolean>(false);
+  const [manualMediaUrl, setManualMediaUrl] = useState<string>("");
 
   // Step 2: and comments... & public reply
   const [triggerType, setTriggerType] = useState<"keyword" | "any">("keyword");
@@ -2057,90 +2062,258 @@ export default function AutoDmPage() {
                     ))}
                   </div>
 
-                  {/* 3-Column Grid of Reel Thumbnails matching Screenshot 1 */}
+                  {/* 3-Column Grid of Reel Thumbnails matching SuperProfile */}
                   {scope === "specific" && (
                     <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                        <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                          Select from your Instagram posts &amp; reels:
-                        </span>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const res = await fetch("/v1/ig/media?limit=30");
-                              if (res.ok) {
-                                const json = await res.json();
-                                const items = json?.media || json?.reels || [];
-                                if (Array.isArray(items) && items.length > 0) {
-                                  setMediaList(items);
-                                  setSelectedMediaId(items[0].id);
-                                  return;
-                                }
-                              }
-                              const fallbackRes = await fetch("/v1/ig/reels?limit=25");
-                              if (fallbackRes.ok) {
-                                const json = await fallbackRes.json();
-                                if (Array.isArray(json?.reels) && json.reels.length > 0) {
-                                  setMediaList(json.reels);
-                                  setSelectedMediaId(json.reels[0].id);
-                                }
-                              }
-                            } catch {}
-                          }}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#2563eb",
-                            fontSize: "0.78rem",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          ↻ Sync Posts &amp; Reels
-                        </button>
-                      </div>
+                      {/* Meta Graph Status & Controls Bar */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "8px", flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#111827" }}>
+                            Select target Reel or Post:
+                          </span>
+                          <span style={{ fontSize: "0.72rem", color: "#059669", background: "#ecfdf5", border: "1px solid #a7f3d0", padding: "1px 7px", borderRadius: "10px", fontWeight: 600 }}>
+                            ● Meta Graph Live
+                          </span>
+                        </div>
 
-                      {mediaList.length === 0 ? (
-                        <div style={{ padding: "36px 16px", textAlign: "center", background: "#f9fafb", borderRadius: "12px", border: "1px dashed #e5e7eb" }}>
-                          <div style={{ fontSize: "1.8rem", marginBottom: "8px" }}>🎬</div>
-                          <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "#111827", marginBottom: "4px" }}>
-                            No posts or reels retrieved yet for @{igAccount.username}
-                          </div>
-                          <div style={{ fontSize: "0.82rem", color: "#6b7280", maxWidth: "360px", margin: "0 auto 16px", lineHeight: 1.4 }}>
-                            You can choose &quot;Any Post/Reel&quot; or &quot;Next Post/Reel&quot; above, or publish a post on your Instagram profile.
-                          </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <button
                             type="button"
-                            onClick={() => setScope("any")}
+                            onClick={() => setManualMediaOpen(!manualMediaOpen)}
                             style={{
-                              padding: "8px 18px",
-                              borderRadius: "20px",
-                              background: "#0066fe",
-                              color: "#ffffff",
-                              border: "none",
-                              fontSize: "0.82rem",
+                              background: "none",
+                              border: "1px solid #e5e7eb",
+                              padding: "4px 10px",
+                              borderRadius: "8px",
+                              color: "#4b5563",
+                              fontSize: "0.75rem",
                               fontWeight: 600,
                               cursor: "pointer",
                             }}
                           >
-                            Switch to Any Post/Reel →
+                            {manualMediaOpen ? "Hide Direct Link" : "🔗 Paste Reel Link"}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={syncingMedia}
+                            onClick={async () => {
+                              setSyncingMedia(true);
+                              try {
+                                const res = await fetch("/v1/ig/media?limit=30");
+                                if (res.ok) {
+                                  const json = await res.json();
+                                  const items = json?.media || json?.reels || [];
+                                  if (Array.isArray(items) && items.length > 0) {
+                                    setMediaList(items);
+                                    setSelectedMediaId(items[0].id);
+                                  }
+                                }
+                              } catch {} finally {
+                                setSyncingMedia(false);
+                              }
+                            }}
+                            style={{
+                              background: "#eff6ff",
+                              border: "1px solid #bfdbfe",
+                              color: "#2563eb",
+                              padding: "4px 10px",
+                              borderRadius: "8px",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <span style={{ display: "inline-block", transform: syncingMedia ? "rotate(180deg)" : "none", transition: "transform 0.4s ease" }}>↻</span>
+                            {syncingMedia ? "Syncing..." : "Sync Instagram"}
                           </button>
                         </div>
-                      ) : (
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(3, 1fr)",
-                            gap: "12px",
-                            maxHeight: "340px",
-                            overflowY: "auto",
-                            paddingRight: "4px",
-                          }}
-                        >
-                            {mediaList.map((m) => {
+                      </div>
+
+                      {/* Manual Reel Link / Media ID input drawer */}
+                      {manualMediaOpen && (
+                        <div style={{ marginBottom: "14px", padding: "12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px" }}>
+                          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                            Paste Instagram Reel Permalink or Media ID:
+                          </label>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <input
+                              type="text"
+                              value={manualMediaUrl}
+                              onChange={(e) => setManualMediaUrl(e.target.value)}
+                              placeholder="https://www.instagram.com/reel/C4829104getaway/ or 18115631537116911"
+                              style={{
+                                flex: 1,
+                                padding: "7px 10px",
+                                borderRadius: "8px",
+                                border: "1px solid #cbd5e1",
+                                fontSize: "0.8rem",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const val = manualMediaUrl.trim();
+                                if (!val) return;
+                                // If it's a numeric ID or matches an existing item
+                                const found = mediaList.find((m) => m.id === val || (m.permalink && m.permalink.includes(val)));
+                                if (found) {
+                                  setSelectedMediaId(found.id);
+                                } else {
+                                  // Extract ID or create entry
+                                  const customId = val.replace(/[^0-9a-zA-Z_-]/g, "");
+                                  setSelectedMediaId(customId);
+                                }
+                                setManualMediaOpen(false);
+                              }}
+                              style={{
+                                padding: "7px 14px",
+                                borderRadius: "8px",
+                                background: "#2563eb",
+                                color: "#ffffff",
+                                border: "none",
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Apply
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Search and Category Filter Tabs */}
+                      <div style={{ display: "flex", gap: "8px", marginBottom: "12px", alignItems: "center" }}>
+                        <div style={{ display: "flex", background: "#f3f4f6", padding: "3px", borderRadius: "8px", gap: "2px" }}>
+                          {[
+                            { id: "all", label: `All (${mediaList.length})` },
+                            { id: "reels", label: `🎬 Reels (${mediaList.filter((m) => m.mediaType === "VIDEO" || m.mediaProductType === "REELS").length})` },
+                            { id: "posts", label: `📸 Posts (${mediaList.filter((m) => m.mediaType !== "VIDEO" && m.mediaProductType !== "REELS").length})` },
+                          ].map((tab) => (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => setReelFilter(tab.id as any)}
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                border: "none",
+                                fontSize: "0.74rem",
+                                fontWeight: reelFilter === tab.id ? 700 : 500,
+                                background: reelFilter === tab.id ? "#ffffff" : "transparent",
+                                color: reelFilter === tab.id ? "#111827" : "#6b7280",
+                                cursor: "pointer",
+                                boxShadow: reelFilter === tab.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                              }}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div style={{ flex: 1, position: "relative" }}>
+                          <input
+                            type="text"
+                            value={reelSearch}
+                            onChange={(e) => setReelSearch(e.target.value)}
+                            placeholder="Filter reels by caption..."
+                            style={{
+                              width: "100%",
+                              padding: "5px 10px 5px 28px",
+                              fontSize: "0.76rem",
+                              borderRadius: "8px",
+                              border: "1px solid #e5e7eb",
+                              background: "#ffffff",
+                            }}
+                          />
+                          <span style={{ position: "absolute", left: "9px", top: "5px", fontSize: "0.75rem", color: "#9ca3af" }}>🔍</span>
+                          {reelSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setReelSearch("")}
+                              style={{ position: "absolute", right: "8px", top: "4px", background: "none", border: "none", fontSize: "0.75rem", color: "#9ca3af", cursor: "pointer" }}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Filtered Reels Grid */}
+                      {(() => {
+                        const filtered = mediaList.filter((m) => {
+                          const isReel = m.mediaType === "VIDEO" || m.mediaProductType === "REELS";
+                          if (reelFilter === "reels" && !isReel) return false;
+                          if (reelFilter === "posts" && isReel) return false;
+                          if (reelSearch.trim()) {
+                            const q = reelSearch.toLowerCase();
+                            const captionMatch = (m.caption || "").toLowerCase().includes(q);
+                            const idMatch = m.id.includes(q);
+                            if (!captionMatch && !idMatch) return false;
+                          }
+                          return true;
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div style={{ padding: "32px 16px", textAlign: "center", background: "#f9fafb", borderRadius: "12px", border: "1px dashed #e5e7eb", marginBottom: "12px" }}>
+                              <div style={{ fontSize: "1.6rem", marginBottom: "6px" }}>🎬</div>
+                              <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#111827", marginBottom: "4px" }}>
+                                {reelFilter === "reels" && mediaList.length > 0
+                                  ? `No video reels on @${igAccount.username} yet (${mediaList.length} live post available)`
+                                  : "No posts or reels match your filter"}
+                              </div>
+                              <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: "12px" }}>
+                                {reelFilter === "reels" && mediaList.length > 0
+                                  ? "You can set automation on your published Instagram post, or publish a new Reel on Instagram."
+                                  : "Try clearing your search query or switching categories."}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReelFilter("all");
+                                  setReelSearch("");
+                                }}
+                                style={{
+                                  padding: "6px 14px",
+                                  borderRadius: "14px",
+                                  background: "#0066fe",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Show All Real Content ({mediaList.length})
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "repeat(3, 1fr)",
+                              gap: "12px",
+                              maxHeight: "310px",
+                              overflowY: "auto",
+                              paddingRight: "4px",
+                              marginBottom: "12px",
+                            }}
+                          >
+                            {filtered.map((m) => {
                               const isSelected = selectedMediaId === m.id;
                               const isReel = m.mediaType === "VIDEO" || m.mediaProductType === "REELS";
+                              const dateFormatted = m.timestamp
+                                ? new Date(m.timestamp).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                                : "";
+
                               return (
                                 <div
                                   key={m.id}
@@ -2151,36 +2324,85 @@ export default function AutoDmPage() {
                                     overflow: "hidden",
                                     aspectRatio: "3/4",
                                     cursor: "pointer",
-                                    border: isSelected ? "3px solid #2563eb" : "1.5px solid transparent",
+                                    border: isSelected ? "3px solid #2563eb" : "1.5px solid #e5e7eb",
                                     boxShadow: isSelected
-                                      ? "0 4px 14px rgba(37, 99, 235, 0.35)"
-                                      : "0 1px 4px rgba(0,0,0,0.06)",
+                                      ? "0 4px 14px rgba(37, 99, 235, 0.4)"
+                                      : "0 1px 3px rgba(0,0,0,0.06)",
+                                    transform: isSelected ? "scale(1.02)" : "scale(1)",
                                     transition: "all 0.15s ease",
                                   }}
                                 >
-                                  {/* Media Type Badge */}
+                                  {/* Media Type Badge top-left */}
                                   <div
                                     style={{
                                       position: "absolute",
                                       top: "6px",
                                       left: "6px",
                                       zIndex: 2,
-                                      background: "rgba(0,0,0,0.7)",
+                                      background: "rgba(0,0,0,0.72)",
+                                      backdropFilter: "blur(4px)",
                                       color: "#ffffff",
                                       fontSize: "0.62rem",
                                       fontWeight: 700,
                                       padding: "2px 6px",
                                       borderRadius: "4px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "3px",
                                     }}
                                   >
                                     {isReel ? "🎬 Reel" : "📸 Post"}
                                   </div>
 
+                                  {/* Date or Selected checkmark top-right */}
+                                  {isSelected ? (
+                                    <div
+                                      style={{
+                                        position: "absolute",
+                                        top: "6px",
+                                        right: "6px",
+                                        zIndex: 3,
+                                        width: "22px",
+                                        height: "22px",
+                                        borderRadius: "50%",
+                                        background: "#2563eb",
+                                        color: "#ffffff",
+                                        display: "grid",
+                                        placeItems: "center",
+                                        fontSize: "0.75rem",
+                                        fontWeight: 800,
+                                        boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                                      }}
+                                    >
+                                      ✓
+                                    </div>
+                                  ) : (
+                                    dateFormatted && (
+                                      <div
+                                        style={{
+                                          position: "absolute",
+                                          top: "6px",
+                                          right: "6px",
+                                          zIndex: 2,
+                                          background: "rgba(0,0,0,0.6)",
+                                          backdropFilter: "blur(4px)",
+                                          color: "#f3f4f6",
+                                          fontSize: "0.58rem",
+                                          fontWeight: 600,
+                                          padding: "2px 5px",
+                                          borderRadius: "4px",
+                                        }}
+                                      >
+                                        {dateFormatted}
+                                      </div>
+                                    )
+                                  )}
+
                                   {/* Thumbnail Image */}
                                   {m.mediaUrl || m.thumbnailUrl ? (
                                     <img
                                       src={m.mediaUrl || m.thumbnailUrl || ""}
-                                      alt="post cover"
+                                      alt="reel cover"
                                       referrerPolicy="no-referrer"
                                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                     />
@@ -2200,81 +2422,127 @@ export default function AutoDmPage() {
                                     </div>
                                   )}
 
-                                  {/* Bottom Dark Gradient Overlay with Caption */}
+                                  {/* Bottom Gradient with Caption & Instagram Stats */}
                                   <div
                                     style={{
                                       position: "absolute",
                                       inset: "auto 0 0 0",
-                                      padding: "24px 8px 8px",
-                                      background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)",
+                                      padding: "26px 8px 7px",
+                                      background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 65%, transparent 100%)",
                                       display: "flex",
                                       flexDirection: "column",
                                       justifyContent: "flex-end",
+                                      gap: "3px",
                                     }}
                                   >
                                     <span
                                       style={{
                                         color: "#ffffff",
-                                        fontSize: "0.68rem",
+                                        fontSize: "0.66rem",
                                         fontWeight: 600,
                                         lineHeight: 1.25,
                                         display: "-webkit-box",
                                         WebkitLineClamp: 2,
                                         WebkitBoxOrient: "vertical",
                                         overflow: "hidden",
-                                        textShadow: "0 1px 2px rgba(0,0,0,0.8)",
+                                        textShadow: "0 1px 2px rgba(0,0,0,0.9)",
                                       }}
                                     >
-                                      {m.caption || `@${igAccount.username} Post`}
+                                      {m.caption || `@${igAccount.username} Content`}
                                     </span>
-                                  </div>
 
-                                  {/* Bottom Right Expand Icon matching Screenshot 1 */}
-                                  <div
-                                    style={{
-                                      position: "absolute",
-                                      bottom: "6px",
-                                      right: "6px",
-                                      width: "22px",
-                                      height: "22px",
-                                      borderRadius: "4px",
-                                      background: "rgba(0,0,0,0.6)",
-                                      backdropFilter: "blur(4px)",
-                                      display: "grid",
-                                      placeItems: "center",
-                                      color: "#ffffff",
-                                      fontSize: "0.75rem",
-                                    }}
-                                  >
-                                    ⛶
-                                  </div>
-
-                                  {/* Blue Selection Checkmark */}
-                                  {isSelected && (
-                                    <div
-                                      style={{
-                                        position: "absolute",
-                                        top: "6px",
-                                        right: "6px",
-                                        width: "22px",
-                                        height: "22px",
-                                        borderRadius: "50%",
-                                        background: "#2563eb",
-                                        color: "#ffffff",
-                                        display: "grid",
-                                        placeItems: "center",
-                                        fontSize: "0.75rem",
-                                        fontWeight: 800,
-                                      }}
-                                    >
-                                      ✓
+                                    {/* Stats: Comments and Likes */}
+                                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.6rem", color: "#e2e8f0", fontWeight: 600 }}>
+                                      <span>💬 {m.commentsCount ?? 0}</span>
+                                      <span>❤️ {m.likeCount ?? 0}</span>
                                     </div>
-                                  )}
+                                  </div>
                                 </div>
                               );
                             })}
                           </div>
-                        )}
+                        );
+                      })()}
+
+                      {/* Selected Target Reel Preview Bar */}
+                      {(() => {
+                        const targetMedia = mediaList.find((m) => m.id === selectedMediaId) || mediaList[0];
+                        if (!targetMedia) return null;
+                        const isReel = targetMedia.mediaType === "VIDEO" || targetMedia.mediaProductType === "REELS";
+
+                        return (
+                          <div
+                            style={{
+                              padding: "10px 14px",
+                              background: "#f0fdf4",
+                              border: "1px solid #bbf7d0",
+                              borderRadius: "10px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", overflow: "hidden" }}>
+                              <div
+                                style={{
+                                  width: "36px",
+                                  height: "36px",
+                                  borderRadius: "6px",
+                                  overflow: "hidden",
+                                  flexShrink: 0,
+                                  background: "#cbd5e1",
+                                }}
+                              >
+                                {targetMedia.mediaUrl || targetMedia.thumbnailUrl ? (
+                                  <img
+                                    src={targetMedia.mediaUrl || targetMedia.thumbnailUrl || ""}
+                                    alt="thumb"
+                                    referrerPolicy="no-referrer"
+                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  />
+                                ) : (
+                                  <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", fontSize: "1rem" }}>🎬</div>
+                                )}
+                              </div>
+
+                              <div style={{ overflow: "hidden" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#166534" }}>
+                                    ✓ Target {isReel ? "Reel" : "Post"} Selected
+                                  </span>
+                                  <span style={{ fontSize: "0.65rem", color: "#64748b", background: "#ffffff", padding: "1px 5px", borderRadius: "4px", border: "1px solid #e2e8f0" }}>
+                                    ID: {targetMedia.id}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: "0.72rem", color: "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {targetMedia.caption ? targetMedia.caption.slice(0, 70) + "..." : `@${igAccount.username} Reel`}
+                                </div>
+                              </div>
+                            </div>
+
+                            {targetMedia.permalink && (
+                              <a
+                                href={targetMedia.permalink}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  fontSize: "0.74rem",
+                                  color: "#2563eb",
+                                  fontWeight: 600,
+                                  textDecoration: "none",
+                                  flexShrink: 0,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                              >
+                                View on IG ↗
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

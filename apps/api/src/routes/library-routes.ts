@@ -65,6 +65,17 @@ export function registerLibraryRoutes(app: FastifyInstance, options: { db: Db })
       await db.select().from(orders).where(eq(orders.id, entitlement.orderId)).limit(1)
     )[0];
 
+    // SEC-S3-02: Revoke entitlement access if order was refunded or cancelled
+    if (order && order.status !== "paid") {
+      return reply.code(403).send({
+        code: "access_revoked",
+        message:
+          order.status === "refunded"
+            ? "Access to this product has been revoked due to a refund"
+            : "Order is not paid or has been cancelled",
+      });
+    }
+
     const deliveryConfig = product?.deliveryConfig as Record<string, unknown> | undefined;
 
     const bumpIncluded =
@@ -219,6 +230,20 @@ export function registerLibraryRoutes(app: FastifyInstance, options: { db: Db })
 
     if (entitlement.expiresAt && entitlement.expiresAt < new Date()) {
       return reply.code(410).send({ code: "expired", message: "Download link has expired" });
+    }
+
+    // SEC-S3-02: Revoke direct download if order was refunded or cancelled
+    const order = (
+      await db.select().from(orders).where(eq(orders.id, entitlement.orderId)).limit(1)
+    )[0];
+    if (order && order.status !== "paid") {
+      return reply.code(403).send({
+        code: "access_revoked",
+        message:
+          order.status === "refunded"
+            ? "Access to this product has been revoked due to a refund"
+            : "Order is not paid or has been cancelled",
+      });
     }
 
     if (entitlement.maxDownloads && entitlement.downloadCount >= entitlement.maxDownloads) {
