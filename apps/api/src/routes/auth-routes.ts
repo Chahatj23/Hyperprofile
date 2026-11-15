@@ -28,9 +28,15 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
   }
 }
 
-// In-memory OTP cache with 10-minute TTL (resilient to module reloads): email -> { code, expiresAt }
-const otpStore: Map<string, { code: string; expiresAt: number }> =
-  (globalThis as any).__hp_otpStore || new Map<string, { code: string; expiresAt: number }>();
+// In-memory OTP cache with 10-minute TTL (resilient to module reloads): email -> { code, expiresAt, failedAttempts, lastSentAt }
+interface OtpEntry {
+  code: string;
+  expiresAt: number;
+  failedAttempts: number;
+  lastSentAt: number;
+}
+const otpStore: Map<string, OtpEntry> =
+  (globalThis as any).__hp_otpStore || new Map<string, OtpEntry>();
 (globalThis as any).__hp_otpStore = otpStore;
 
 // Defensive Rate Limiter against brute-force & credential stuffing
@@ -89,6 +95,9 @@ export function registerAuthRoutes(
     }
     if (!password || password.length < 8) {
       return reply.code(400).send({ code: "weak_password", message: "Password must be at least 8 characters long for security" });
+    }
+    if (password.length > 128) {
+      return reply.code(400).send({ code: "password_too_long", message: "Password cannot exceed 128 characters" });
     }
 
     const existingUser = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
@@ -221,19 +230,50 @@ export function registerAuthRoutes(
     };
   });
 
-  // Send 6-digit OTP to email
+  // Send 6-digit OTP to email with brute-force & spam throttling
   app.post("/v1/auth/otp/send", async (req: FastifyRequest, reply: FastifyReply) => {
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
     const body = req.body as { email?: string };
     const email = body?.email?.trim().toLowerCase();
     if (!email || !email.includes("@")) {
       return reply.code(400).send({ code: "invalid_email", message: "Valid email is required" });
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-    otpStore.set(email, { code, expiresAt });
+    // 1. IP rate limiting: max 5 OTP requests per IP per 15 minutes
+    const ipLimit = checkRateLimit(`otp_send_ip:${ip}`, 5, 15 * 60 * 1000);
+    if (!ipLimit.allowed) {
+      return reply.code(429).header("Retry-After", String(ipLimit.retryAfterSec)).send({
+        code: "rate_limited",
+        message: `Too many verification code requests from this device. Please retry in ${ipLimit.retryAfterSec} seconds.`,
+      });
+    }
 
-    logger.info("auth otp generated", { email, code });
+    // 2. Email rate limiting: max 3 requests per email per 15 minutes
+    const emailLimit = checkRateLimit(`otp_send_email:${email}`, 3, 15 * 60 * 1000);
+    if (!emailLimit.allowed) {
+      return reply.code(429).header("Retry-After", String(emailLimit.retryAfterSec)).send({
+        code: "rate_limited",
+        message: `Too many verification code requests for this email. Please retry in ${emailLimit.retryAfterSec} seconds.`,
+      });
+    }
+
+    // 3. Cooldown check: minimum 60 seconds between resends to prevent email bombing
+    const existing = otpStore.get(email);
+    if (existing && Date.now() - existing.lastSentAt < 60 * 1000) {
+      const waitSec = Math.ceil((60 * 1000 - (Date.now() - existing.lastSentAt)) / 1000);
+      return reply.code(429).header("Retry-After", String(waitSec)).send({
+        code: "cooldown",
+        message: `Please wait ${waitSec} seconds before requesting a new code.`,
+      });
+    }
+
+    // 4. Cryptographically secure random 6-digit integer (CSPRNG)
+    const code = crypto.randomInt(100000, 1000000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    otpStore.set(email, { code, expiresAt, failedAttempts: 0, lastSentAt: Date.now() });
+
+    // Defensive logging: NEVER log OTP codes in plaintext to server logs
+    logger.info("auth otp generated", { email });
 
     const mailResult = await sendOtpEmail(email, code);
 
@@ -243,18 +283,17 @@ export function registerAuthRoutes(
       success: true,
       isDeliveredViaEmail: mailResult.sent,
       provider: mailResult.provider,
-      ...(mailResult.previewUrl ? { previewUrl: mailResult.previewUrl } : {}),
+      ...(mailResult.previewUrl && process.env.NODE_ENV !== "production" ? { previewUrl: mailResult.previewUrl } : {}),
       message: mailResult.sent
-        ? mailResult.provider === "ethereal"
-          ? `Verification email delivered! Click to preview in web inbox.`
-          : `Verification code sent to ${email}. Please check your inbox.`
+        ? `Verification code sent to ${email}. Please check your inbox.`
         : `Preview Code: ${code} (Auto-filled below). To receive real emails in your inbox, configure SMTP or RESEND_API_KEY in .env.`,
       ...(isOfflineFallback ? { code, debugOtp: code } : {}),
     };
   });
 
-  // Verify OTP and issue session
+  // Verify OTP and issue session with brute-force lockout
   app.post("/v1/auth/otp/verify", async (req: FastifyRequest, reply: FastifyReply) => {
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
     const body = req.body as { email?: string; code?: string };
     const email = body?.email?.trim().toLowerCase();
     const code = body?.code?.trim();
@@ -263,14 +302,64 @@ export function registerAuthRoutes(
       return reply.code(400).send({ code: "missing_fields", message: "Email and code are required" });
     }
 
-    const cached = otpStore.get(email);
-    // SEC-S1-05: Mock OTP bypass '123456' is strictly gated behind ENABLE_TEST_MOCKS === "true"
-    const isMock = code === "123456" && process.env.ENABLE_TEST_MOCKS === "true";
-    if (!isMock && (!cached || cached.code !== code || cached.expiresAt < Date.now())) {
-      return reply.code(401).send({ code: "invalid_otp", message: "Invalid or expired verification code" });
+    // Rate limit brute-force verification guesses per IP & email (max 10 attempts per 15 min)
+    const verifyRate = checkRateLimit(`otp_verify:${ip}:${email}`, 10, 15 * 60 * 1000);
+    if (!verifyRate.allowed) {
+      return reply.code(429).header("Retry-After", String(verifyRate.retryAfterSec)).send({
+        code: "rate_limited",
+        message: `Too many verification attempts. Please wait ${verifyRate.retryAfterSec} seconds before trying again.`,
+      });
     }
 
+    const cached = otpStore.get(email);
+
+    // SEC-S1-05: Mock OTP bypass '123456' is strictly forbidden in production
+    const isMock =
+      process.env.NODE_ENV !== "production" &&
+      process.env.ENABLE_TEST_MOCKS === "true" &&
+      code === "123456";
+
+    function isCodeMatch(a: string, b: string): boolean {
+      const bufA = Buffer.from(a);
+      const bufB = Buffer.from(b);
+      if (bufA.length !== bufB.length) return false;
+      return crypto.timingSafeEqual(bufA, bufB);
+    }
+
+    if (!isMock) {
+      if (!cached || cached.expiresAt < Date.now()) {
+        return reply.code(401).send({ code: "invalid_otp", message: "Invalid or expired verification code" });
+      }
+
+      // Check max failed attempts on this specific OTP (defense against code brute force)
+      if (cached.failedAttempts >= 5) {
+        otpStore.delete(email);
+        return reply.code(429).send({
+          code: "otp_locked",
+          message: "Maximum verification attempts exceeded. For your security, this code has been revoked. Please request a new code.",
+        });
+      }
+
+      if (!isCodeMatch(code, cached.code)) {
+        cached.failedAttempts += 1;
+        const remaining = 5 - cached.failedAttempts;
+        if (remaining <= 0) {
+          otpStore.delete(email);
+          return reply.code(429).send({
+            code: "otp_locked",
+            message: "Maximum verification attempts exceeded. For your security, this code has been revoked. Please request a new code.",
+          });
+        }
+        return reply.code(401).send({
+          code: "invalid_otp",
+          message: `Invalid verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`,
+        });
+      }
+    }
+
+    // Success! Single-use: purge immediately from cache
     otpStore.delete(email);
+    resetRateLimit(`otp_verify:${ip}:${email}`);
 
     // Find or create user
     let user = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];

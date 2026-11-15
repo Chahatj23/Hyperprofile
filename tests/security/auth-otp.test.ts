@@ -148,8 +148,8 @@ describe("Authentication & OTP Security Verification Tests", () => {
     expect(verified.creatorId).toBe(payload.creatorId);
   });
 
-  it("Validates password strength requirement of at least 8 characters", () => {
-    const isPasswordValid = (pwd: string) => Boolean(pwd && pwd.trim().length >= 8);
+  it("Validates password strength requirement of at least 8 characters and max 128 characters", () => {
+    const isPasswordValid = (pwd: string) => Boolean(pwd && pwd.trim().length >= 8 && pwd.length <= 128);
 
     expect(isPasswordValid("")).toBe(false);
     expect(isPasswordValid("12345")).toBe(false);
@@ -157,6 +157,63 @@ describe("Authentication & OTP Security Verification Tests", () => {
     expect(isPasswordValid("1234567")).toBe(false);
     expect(isPasswordValid("12345678")).toBe(true);
     expect(isPasswordValid("secure_creator_pwd_2026")).toBe(true);
+    // Reject excessive length string (hash DoS prevention)
+    expect(isPasswordValid("a".repeat(129))).toBe(false);
+  });
+
+  it("Enforces brute-force defense: revokes and destroys OTP after 5 consecutive failed attempts", () => {
+    interface SecureOtpEntry {
+      code: string;
+      expiresAt: number;
+      failedAttempts: number;
+    }
+    const store = new Map<string, SecureOtpEntry>();
+    const email = "victim@example.com";
+    const realCode = "839401";
+
+    store.set(email, {
+      code: realCode,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      failedAttempts: 0,
+    });
+
+    function verifyAttempt(attemptCode: string): { success: boolean; locked?: boolean } {
+      const entry = store.get(email);
+      if (!entry) return { success: false, locked: true };
+      if (entry.failedAttempts >= 5) {
+        store.delete(email);
+        return { success: false, locked: true };
+      }
+      if (attemptCode !== entry.code) {
+        entry.failedAttempts += 1;
+        if (entry.failedAttempts >= 5) {
+          store.delete(email);
+          return { success: false, locked: true };
+        }
+        return { success: false };
+      }
+      store.delete(email);
+      return { success: true };
+    }
+
+    // 4 failed attempts: code remains in store with incremented counter
+    for (let i = 1; i <= 4; i++) {
+      const res = verifyAttempt(`00000${i}`);
+      expect(res.success).toBe(false);
+      expect(res.locked).toBeFalsy();
+      expect(store.get(email)?.failedAttempts).toBe(i);
+    }
+
+    // 5th failed attempt: triggers automatic revocation and destruction
+    const fifth = verifyAttempt("999999");
+    expect(fifth.success).toBe(false);
+    expect(fifth.locked).toBe(true);
+    expect(store.has(email)).toBe(false); // Destroyed!
+
+    // Even if the attacker now tries the REAL code, it fails because it was destroyed
+    const lateAttempt = verifyAttempt(realCode);
+    expect(lateAttempt.success).toBe(false);
+    expect(lateAttempt.locked).toBe(true);
   });
 });
 

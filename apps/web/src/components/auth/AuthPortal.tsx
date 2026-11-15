@@ -445,7 +445,7 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              {!isDeliveredViaEmail && receivedOtp && (
+              {process.env.NODE_ENV !== "production" && !isDeliveredViaEmail && receivedOtp && (
                 <div
                   style={{
                     padding: "16px 18px",
@@ -503,7 +503,7 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
                   }}
                 >
                   <div>✉️ 6-digit verification code sent to <strong>{email}</strong>. Please check your inbox and enter the code below.</div>
-                  {previewUrl && (
+                  {process.env.NODE_ENV !== "production" && previewUrl && (
                     <div style={{ marginTop: "8px" }}>
                       <a
                         href={previewUrl}
