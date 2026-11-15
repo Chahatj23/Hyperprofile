@@ -239,10 +239,12 @@ export function registerAuthRoutes(
 
     return {
       success: true,
+      isDeliveredViaEmail: mailResult.sent,
+      provider: mailResult.provider,
       message: mailResult.sent
-        ? `Verification code sent to ${email}`
-        : `Verification code: ${code}`,
-      code: mailResult.sent ? undefined : code,
+        ? `Verification code sent to ${email}. Please check your inbox.`
+        : `Preview Code: ${code} (Auto-filled below). To receive real emails in your inbox, configure SMTP or RESEND_API_KEY in .env.`,
+      code,
       debugOtp: code,
     };
   });

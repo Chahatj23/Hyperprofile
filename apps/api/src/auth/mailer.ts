@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { logger } from "@hyperprofile/shared";
 
 export interface MailOptions {
@@ -50,8 +51,42 @@ export async function sendEmail(opts: MailOptions): Promise<MailResult> {
     }
   }
 
-  // 2. Fallback Logger (Development / Preview / Staging without configured mail provider)
-  logger.info("auth otp email dispatched (local/preview delivery)", {
+  // 2. Real SMTP (Gmail, Brevo, SendGrid, Mailgun, AWS SES, or custom SMTP)
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+  const smtpPort = Number(process.env.SMTP_PORT) || 587;
+
+  if (smtpUser && smtpPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      });
+
+      const from = process.env.SMTP_FROM || `"Hyperprofile" <${smtpUser}>`;
+      const info = await transporter.sendMail({
+        from,
+        to,
+        subject,
+        html,
+        text: text || html.replace(/<[^>]+>/g, ""),
+      });
+
+      logger.info("email sent via smtp", { to, subject, messageId: info.messageId });
+      return { sent: true, provider: "smtp", id: info.messageId };
+    } catch (err) {
+      logger.error("smtp sending failed", { err: String(err) });
+    }
+  }
+
+  // 3. Fallback Logger (Development / Preview / Staging without configured mail provider)
+  logger.info("auth otp email generated (preview delivery)", {
     to,
     subject,
   });
@@ -65,18 +100,20 @@ export async function sendEmail(opts: MailOptions): Promise<MailResult> {
 export async function sendOtpEmail(email: string, code: string): Promise<MailResult> {
   const subject = `Your Hyperprofile Verification Code: ${code}`;
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; borderRadius: 16px;">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="color: #0f172a; margin: 0 0 6px;">Creator Workspace</h2>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #0284c7 0%, #0066fe 100%); color: #ffffff; display: inline-grid; place-items: center; font-size: 24px; font-weight: 800; margin-bottom: 12px;">✦</div>
+        <h2 style="color: #0f172a; margin: 0 0 6px; font-size: 20px;">Creator Workspace</h2>
         <p style="color: #64748b; font-size: 14px; margin: 0;">Your one-time sign in code</p>
       </div>
-      <div style="background: #f8fafc; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0;">
-        <span style="font-size: 32px; font-weight: 800; letter-spacing: 0.25em; color: #0284c7; font-family: monospace;">${code}</span>
+      <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 14px; padding: 22px; text-align: center; margin: 24px 0;">
+        <div style="font-size: 11px; font-weight: 700; color: #0369a1; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;">6-DIGIT VERIFICATION CODE</div>
+        <span style="font-size: 34px; font-weight: 800; letter-spacing: 0.25em; color: #0284c7; font-family: monospace;">${code}</span>
       </div>
-      <p style="color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 12px;">
+      <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
         Enter this 6-digit code on the sign in page. This code will expire in <strong>10 minutes</strong>.
       </p>
-      <p style="color: #94a3b8; font-size: 12px; margin: 0; border-top: 1px solid #f1f5f9; padding-top: 14px;">
+      <p style="color: #94a3b8; font-size: 12px; margin: 0; border-top: 1px solid #f1f5f9; padding-top: 16px;">
         If you did not request this verification code, please ignore this email.
       </p>
     </div>

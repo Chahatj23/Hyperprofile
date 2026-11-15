@@ -3,7 +3,10 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "dev": "pnpm run docker:up && concurrently -n api,web,worker -c blue,green,magenta \"pnpm --filter @hyperprofile/api dev\" \"pnpm --filter @hyperprofile/web dev\" \"pnpm --filter @hyperprofile/worker dev\"",
+    "dev": "concurrently -n api,web -c blue,green \"pnpm --filter @hyperprofile/api dev\" \"pnpm --filter @hyperprofile/web dev\"",
+    "dev:all": "concurrently -n api,web,worker -c blue,green,magenta \"pnpm --filter @hyperprofile/api dev\" \"pnpm --filter @hyperprofile/web dev\" \"pnpm --filter @hyperprofile/worker dev\"",
+    "dev:web": "pnpm --filter @hyperprofile/web dev",
+    "dev:docker": "pnpm run docker:up && concurrently -n api,web,worker -c blue,green,magenta \"pnpm --filter @hyperprofile/api dev\" \"pnpm --filter @hyperprofile/web dev\" \"pnpm --filter @hyperprofile/worker dev\"",
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",

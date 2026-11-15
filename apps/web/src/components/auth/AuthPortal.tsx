@@ -17,6 +17,8 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
   const [displayName, setDisplayName] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [isDeliveredViaEmail, setIsDeliveredViaEmail] = useState(false);
+  const [receivedOtp, setReceivedOtp] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -115,11 +117,15 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
 
       const receivedCode = data.code || data.debugOtp;
       setOtpSent(true);
+      setIsDeliveredViaEmail(Boolean(data.isDeliveredViaEmail));
       if (receivedCode) {
+        setReceivedOtp(receivedCode);
         setOtpCode(receivedCode);
-        setSuccessMsg(`Verification code: ${receivedCode}`);
+      }
+      if (data.isDeliveredViaEmail) {
+        setSuccessMsg(`✓ Verification code sent to ${email}. Please check your inbox.`);
       } else {
-        setSuccessMsg(data.message || "6-digit code sent to your email!");
+        setSuccessMsg(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
@@ -430,6 +436,32 @@ export function AuthPortal({ initialMode = "login" }: { initialMode?: "login" | 
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {!isDeliveredViaEmail && receivedOtp && (
+                <div
+                  style={{
+                    padding: "16px 18px",
+                    borderRadius: "14px",
+                    background: "rgba(2, 132, 199, 0.08)",
+                    border: "1px solid rgba(2, 132, 199, 0.25)",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>
+                    Your Verification Code
+                  </div>
+                  <div style={{ fontSize: "2rem", fontWeight: 800, color: "#0284c7", letterSpacing: "0.25em", fontFamily: "monospace" }}>
+                    {receivedOtp}
+                  </div>
+                  <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "4px" }}>
+                    Auto-filled below. Click below to verify and enter workspace.
+                  </div>
+                </div>
+              )}
+              {isDeliveredViaEmail && (
+                <div style={{ padding: "12px 14px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.25)", color: "#059669", fontSize: "0.82rem", fontWeight: 600 }}>
+                  ✓ 6-digit code delivered to your email inbox ({email}).
+                </div>
+              )}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                   <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "#334155" }}>
