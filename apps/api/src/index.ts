@@ -142,7 +142,20 @@ app.addContentTypeParser(
 );
 
 await app.register(cors, {
-  origin: [env.WEB_ORIGIN, env.META_REDIRECT_URI.replace(/\/api\/.*/, "")],
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (
+      origin === env.WEB_ORIGIN ||
+      origin === "http://localhost:3000" ||
+      origin === "http://127.0.0.1:3000" ||
+      origin.endsWith(".vercel.app") ||
+      origin.endsWith(".onrender.com") ||
+      origin.includes("trycloudflare.com")
+    ) {
+      return cb(null, true);
+    }
+    return cb(null, false);
+  },
   credentials: true,
 });
 await app.register(cookie, { secret: env.SESSION_SECRET });
@@ -283,10 +296,28 @@ app.get("/v1/health", async () => ({ ok: true, version: "v1" }));
 
 app.get("/v1/auth/instagram/start", async (req, reply) => {
   const session = getSession(req, env.SESSION_SECRET);
+  const query = req.query as { return_origin?: string; return_to?: string };
+  let returnOrigin: string | null = null;
+  if (query?.return_origin) {
+    returnOrigin = query.return_origin;
+  } else if (query?.return_to) {
+    try {
+      returnOrigin = new URL(query.return_to).origin;
+    } catch {}
+  } else if (req.headers.referer) {
+    try {
+      returnOrigin = new URL(req.headers.referer).origin;
+    } catch {}
+  }
+  if (!returnOrigin) {
+    returnOrigin = env.WEB_ORIGIN;
+  }
+
   const statePayload = JSON.stringify({
     n: crypto.randomUUID(),
     t: Date.now(),
     creatorId: session?.creatorId ?? null,
+    returnOrigin,
   });
   const state = signState(statePayload, env.SESSION_SECRET);
   reply.setCookie("ig_oauth_state", state, {
@@ -314,9 +345,30 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
   const fwdHost = (req.headers["x-forwarded-host"] as string) || "";
   const host = (req.headers.host as string) || "";
   const tunnelOrigin = new URL(env.META_REDIRECT_URI).origin;
-  const redirectOrigin = (fwdHost.includes("trycloudflare") || host.includes("trycloudflare"))
+  let redirectOrigin = (fwdHost.includes("trycloudflare") || host.includes("trycloudflare"))
     ? tunnelOrigin
     : env.WEB_ORIGIN;
+
+  let stateCreatorId: string | null = null;
+  if (query.state) {
+    const verified = verifyState(query.state, env.SESSION_SECRET);
+    if (verified) {
+      try {
+        const payload = JSON.parse(verified) as { t?: number; creatorId?: string | null; returnOrigin?: string | null };
+        if (payload.returnOrigin && typeof payload.returnOrigin === "string") {
+          try {
+            const u = new URL(payload.returnOrigin);
+            if (u.protocol === "http:" || u.protocol === "https:") {
+              redirectOrigin = u.origin;
+            }
+          } catch {}
+        }
+        if (payload.t && Date.now() - payload.t <= 15 * 60 * 1000) {
+          stateCreatorId = payload.creatorId ?? null;
+        }
+      } catch {}
+    }
+  }
 
   if (query.error) {
     logger.warn("instagram oauth error", { error: query.error, description: query.error_description });
@@ -332,9 +384,8 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
     logger.warn("instagram oauth state HMAC signature mismatch");
     return reply.redirect(`${redirectOrigin}/connect?error=invalid_state`);
   }
-  let stateCreatorId: string | null = null;
   try {
-    const payload = JSON.parse(verifiedState) as { t?: number; creatorId?: string | null };
+    const payload = JSON.parse(verifiedState) as { t?: number; creatorId?: string | null; returnOrigin?: string | null };
     if (!payload.t || Date.now() - payload.t > 15 * 60 * 1000) {
       logger.warn("instagram oauth state expired");
       return reply.redirect(`${redirectOrigin}/connect?error=state_expired`);
@@ -530,9 +581,11 @@ app.get("/v1/ig/webhook-info", async (req) => {
     } catch {}
   }
 
-  const tunnelUrl = process.env.TUNNEL_URL || "https://telecharger-incoming-icon-filled.trycloudflare.com";
+  const webhookBase =
+    process.env.TUNNEL_URL ||
+    (env.META_REDIRECT_URI ? new URL(env.META_REDIRECT_URI).origin : "https://hyperprofile-api.onrender.com");
   return {
-    webhookUrl: `${tunnelUrl}/webhooks/instagram`,
+    webhookUrl: `${webhookBase}/webhooks/instagram`,
     verifyToken: env.META_WEBHOOK_VERIFY_TOKEN,
     connectedAccount,
     igUserId,

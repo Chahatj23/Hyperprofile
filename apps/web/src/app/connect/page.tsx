@@ -211,7 +211,7 @@ function ConnectInner() {
                   <strong>Meta App Tester Role</strong>: In your open Meta App Dashboard (App ID <code>2808976552852144</code>), navigate to <strong>Roles &rarr; Roles</strong>, add your Instagram handle under <em>Instagram Testers</em>, and accept the pending invite in your Instagram app (Settings &rarr; Apps and Websites &rarr; Tester Invites).
                 </li>
                 <li style={{ marginBottom: "6px" }}>
-                  <strong>Active Redirect URI</strong>: In Meta App &rarr; Instagram Business &rarr; Unified Login Configuration (<code>1131117443101525</code>), ensure the active redirect URI is set in your Meta App.
+                  <strong>Permanent Redirect URI</strong>: In Meta App &rarr; Instagram Business &rarr; Unified Login Configuration (<code>1131117443101525</code>) and App Client OAuth settings, the redirect URI is permanently set to <code>https://hyperprofile-api.onrender.com/api/auth/instagram/callback</code>.
                 </li>
               </ol>
               <p style={{ margin: 0 }}>
