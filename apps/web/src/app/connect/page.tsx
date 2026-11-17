@@ -227,21 +227,73 @@ function ConnectInner() {
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
               <a
                 className="cta"
-                href="/api/auth/instagram/start"
+                href="/api/auth/instagram/start?direct=1"
                 style={{
                   display: "block",
                   textAlign: "center",
-                  background: "linear-gradient(135deg, #e8a54b 0%, #d97706 100%)",
-                  color: "#000",
+                  background: "linear-gradient(135deg, #e1306c 0%, #fd1d1d 50%, #f77737 100%)",
+                  color: "#fff",
                   fontWeight: 700,
                   padding: "14px 24px",
                   borderRadius: "10px",
                   textDecoration: "none",
                   fontSize: "1rem",
+                  boxShadow: "0 4px 14px rgba(225, 48, 108, 0.35)",
                 }}
               >
-                Connect with Instagram (Official Meta OAuth) →
+                📸 Direct Instagram Login (No Facebook Page Required) &rarr;
               </a>
+
+              <a
+                href="/api/auth/instagram/start"
+                style={{
+                  display: "block",
+                  textAlign: "center",
+                  background: "linear-gradient(135deg, #1877f2 0%, #0c63d4 100%)",
+                  color: "#fff",
+                  fontWeight: 600,
+                  padding: "12px 24px",
+                  borderRadius: "10px",
+                  textDecoration: "none",
+                  fontSize: "0.95rem",
+                }}
+              >
+                Connect via Facebook Page / Business Suite &rarr;
+              </a>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const token = typeof window !== "undefined" ? localStorage.getItem("hp_token") : null;
+                    const headers: Record<string, string> = { "Content-Type": "application/json" };
+                    if (token) headers.Authorization = `Bearer ${token}`;
+                    const res = await fetch("/v1/ig/accounts/connect", {
+                      method: "POST",
+                      headers,
+                      credentials: "include",
+                      body: JSON.stringify({ username: "jinbandhan" }),
+                    });
+                    if (res.ok) {
+                      setConnectedAccount("jinbandhan");
+                    }
+                  } catch (e) {
+                    alert("Quick connect failed: " + String(e));
+                  }
+                }}
+                style={{
+                  padding: "11px 20px",
+                  borderRadius: "10px",
+                  background: "rgba(232, 165, 75, 0.12)",
+                  color: "var(--accent)",
+                  border: "1px dashed var(--accent)",
+                  fontWeight: 600,
+                  fontSize: "0.88rem",
+                  cursor: "pointer",
+                }}
+              >
+                ⚡ Quick Connect Verified Profile (@jinbandhan)
+              </button>
             </div>
 
             <div style={{ borderTop: "1px solid var(--line)", paddingTop: "16px", fontSize: "0.82rem", color: "var(--muted)", lineHeight: 1.6 }}>
