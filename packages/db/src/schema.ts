@@ -425,3 +425,45 @@ export const featureFlags = pgTable("feature_flags", {
   config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
   ...timestamps,
 });
+
+/** Zero-Cost Architecture: Generic PostgreSQL Job Queue using SELECT ... FOR UPDATE SKIP LOCKED */
+export const jobQueueTable = pgTable(
+  "job_queue",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    queue: text("queue").notNull().default("default"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    status: text("status").notNull().default("pending"), // 'pending' | 'processing' | 'completed' | 'failed'
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(5),
+    runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("job_queue_status_run_idx").on(t.status, t.runAt),
+    index("job_queue_queue_status_idx").on(t.queue, t.status),
+  ],
+);
+
+/** Zero-Cost Architecture: Daily event rollups to cap storage under 400 MB */
+export const dailyRollups = pgTable(
+  "daily_rollups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    creatorId: uuid("creator_id").notNull().references(() => creators.id),
+    date: text("date").notNull(), // 'YYYY-MM-DD'
+    pageViews: integer("page_views").notNull().default(0),
+    linkClicks: integer("link_clicks").notNull().default(0),
+    leadSubmits: integer("lead_submits").notNull().default(0),
+    checkouts: integer("checkouts").notNull().default(0),
+    salesPaise: integer("sales_paise").notNull().default(0),
+    ordersCount: integer("orders_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("daily_rollups_creator_date_uidx").on(t.creatorId, t.date)],
+);

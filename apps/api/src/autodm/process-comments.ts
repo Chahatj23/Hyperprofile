@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { and, eq } from "drizzle-orm";
-import { automationRules, creators, igAccounts, type Db } from "@hyperprofile/db";
+import { automationRules, creators, igAccounts, PostgresJobQueue, type Db } from "@hyperprofile/db";
 import {
   ruleMatchesComment,
   shouldIgnoreComment,
@@ -92,6 +92,11 @@ export async function processCommentWebhook(
   claimed: number;
   skipped: number;
 }> {
+  if (process.env.PAUSE_AUTODM === "true") {
+    logger.info("processCommentWebhook skipped: PAUSE_AUTODM kill switch is active");
+    return { claimed: 0, skipped: 0 };
+  }
+
   let claimed = 0;
   let skipped = 0;
 
@@ -278,6 +283,23 @@ export async function processCommentWebhook(
         publicReplyTemplates.length > 0
           ? publicReplyTemplates[Math.floor(Math.random() * publicReplyTemplates.length)]
           : null;
+
+      // Zero-Cost Architecture: Persist to Postgres Job Queue for durability and Cloudflare Cron drain
+      try {
+        const pQueue = new PostgresJobQueue(db);
+        await pQueue.enqueue("autodm", {
+          igUserId,
+          commentId: v.id,
+          username,
+          text: dmText,
+          publicReply: chosenPublicReply ?? null,
+          receivedAt: Date.now(),
+        });
+      } catch (err) {
+        logger.warn("failed to enqueue to PostgresJobQueue, falling back to memory queue", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
 
       enqueueReply({
         igUserId,

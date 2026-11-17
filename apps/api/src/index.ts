@@ -37,6 +37,7 @@ import { registerDashboardRoutes } from "./routes/dashboard-routes.js";
 import { registerComplianceSafetyRoutes } from "./routes/compliance-routes.js";
 import { registerAdminRoutes } from "./routes/admin-routes.js";
 import { registerCrmRoutes } from "./routes/crm-routes.js";
+import { registerJobRoutes } from "./routes/job-routes.js";
 import { registerComplianceRoutes } from "./autodm/compliance-routes.js";
 import { isSafeRedirectUrl, resolveAndRecordClick } from "./autodm/links.js";
 import { processCommentWebhook } from "./autodm/process-comments.js";
@@ -209,12 +210,13 @@ registerComplianceSafetyRoutes(app, { db });
 registerAdminRoutes(app, { db, adminSecret: env.SESSION_SECRET });
 registerCrmRoutes(app, { db, sessionSecret: env.SESSION_SECRET });
 
-startTokenRefreshJob({
+registerJobRoutes(app, {
   db,
+  cronSecret: env.CRON_SECRET || env.SESSION_SECRET,
   appId: env.META_APP_ID,
   appSecret: env.META_APP_SECRET,
   tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
-  graphVersion: env.META_GRAPH_VERSION,
+  metaGraphVersion: env.META_GRAPH_VERSION,
 });
 
 app.get("/r/:id", async (req, reply) => {
@@ -227,21 +229,44 @@ app.get("/r/:id", async (req, reply) => {
   return reply.code(302).redirect(target);
 });
 
-startReplyWorker({
-  db,
-  tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
-  graphVersion: env.META_GRAPH_VERSION,
-  hourlyCap: 700,
-  replyWindowMs: 7 * 24 * 60 * 60 * 1000,
-});
+// Zero-Cost Architecture Invariant:
+// In production, background pollers are disabled by default so Neon Postgres
+// can scale to zero and sleep after 5 minutes of inactivity.
+// Scheduled jobs (token refresh, comment queue draining, retention cleanup)
+// are executed via Cloudflare Cron Triggers hitting /v1/jobs/* endpoints.
+const enableBackgroundPollers =
+  process.env.ENABLE_BACKGROUND_POLLERS === "true" ||
+  (process.env.NODE_ENV !== "production" && process.env.ENABLE_BACKGROUND_POLLERS !== "false");
 
-startCommentPoller({
-  db,
-  tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
-  graphVersion: env.META_GRAPH_VERSION,
-  intervalMs: 20000,
-  publicBaseUrl: env.WEB_ORIGIN,
-});
+if (enableBackgroundPollers) {
+  startTokenRefreshJob({
+    db,
+    appId: env.META_APP_ID,
+    appSecret: env.META_APP_SECRET,
+    tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
+    graphVersion: env.META_GRAPH_VERSION,
+  });
+
+  startReplyWorker({
+    db,
+    tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
+    graphVersion: env.META_GRAPH_VERSION,
+    hourlyCap: 700,
+    replyWindowMs: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  startCommentPoller({
+    db,
+    tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
+    graphVersion: env.META_GRAPH_VERSION,
+    intervalMs: 20000,
+    publicBaseUrl: env.WEB_ORIGIN,
+  });
+} else {
+  logger.info(
+    "zero-cost launch mode: continuous background pollers disabled to allow Neon database sleep. Scheduled tasks handled via Cloudflare Cron triggers.",
+  );
+}
 
 app.get("/health", async () => ({
   ok: true,

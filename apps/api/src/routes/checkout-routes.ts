@@ -36,6 +36,13 @@ export function registerCheckoutRoutes(
 
   // Create checkout order
   app.post("/v1/checkout/create-order", async (req: FastifyRequest, reply: FastifyReply) => {
+    if (process.env.PAUSE_CHECKOUT === "true") {
+      return reply.code(503).send({
+        code: "checkout_paused",
+        message: "Checkout is temporarily paused for maintenance.",
+      });
+    }
+
     const body = req.body as {
       productId?: string;
       buyerEmail?: string;

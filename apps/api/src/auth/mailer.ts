@@ -16,10 +16,108 @@ export interface MailResult {
   error?: string;
 }
 
+export function parseSender(
+  fromStr?: string,
+  defaultEmail = "contact@hyperprofile.bio",
+  defaultName = "Hyperprofile",
+): { name: string; email: string } {
+  if (!fromStr) return { name: defaultName, email: defaultEmail };
+  const match = fromStr.match(/^(?:["']?([^"']+)["']?\s*)?<([^>]+)>$/);
+  if (match) {
+    return {
+      name: match[1]?.trim() || defaultName,
+      email: match[2]?.trim() || defaultEmail,
+    };
+  }
+  if (fromStr.includes("@")) {
+    return { name: defaultName, email: fromStr.trim() };
+  }
+  return { name: defaultName, email: defaultEmail };
+}
+
 export async function sendEmail(opts: MailOptions): Promise<MailResult> {
   const { to, subject, html, text } = opts;
 
-  // 1. Resend API (HTTP REST — zero SMTP port blocking)
+  // 1. Brevo REST API (POST https://api.brevo.com/v3/smtp/email) - High priority transactional email
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (brevoApiKey) {
+    try {
+      const defaultEmail = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || "jainzchahat@gmail.com";
+      const sender = parseSender(
+        process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM,
+        defaultEmail,
+        process.env.BREVO_SENDER_NAME || "Hyperprofile",
+      );
+
+      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": brevoApiKey,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          sender: {
+            name: sender.name,
+            email: sender.email,
+          },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text || html.replace(/<[^>]+>/g, ""),
+        }),
+      });
+
+      if (res.ok) {
+        const json = (await res.json()) as { messageId?: string };
+        logger.info("email sent via brevo api", { to, subject, messageId: json.messageId });
+        return { sent: true, provider: "brevo", ...(json.messageId ? { id: json.messageId } : {}) };
+      } else {
+        const errText = await res.text();
+        logger.warn("brevo api error", { status: res.status, err: errText });
+      }
+    } catch (err) {
+      logger.error("brevo api network error", { err: String(err) });
+    }
+  }
+
+  // 2. Brevo SMTP Relay (smtp-relay.brevo.com:587)
+  const brevoSmtpKey = process.env.BREVO_SMTP_KEY;
+  const brevoSmtpUser = process.env.BREVO_SMTP_USER || process.env.SMTP_USER;
+  if (brevoSmtpKey && brevoSmtpUser) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp-relay.brevo.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: brevoSmtpUser,
+          pass: brevoSmtpKey,
+        },
+      });
+
+      const sender = parseSender(
+        process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM,
+        brevoSmtpUser,
+        process.env.BREVO_SENDER_NAME || "Hyperprofile",
+      );
+
+      const info = await transporter.sendMail({
+        from: `"${sender.name}" <${sender.email}>`,
+        to,
+        subject,
+        html,
+        text: text || html.replace(/<[^>]+>/g, ""),
+      });
+
+      logger.info("email sent via brevo smtp", { to, subject, messageId: info.messageId });
+      return { sent: true, provider: "brevo-smtp", id: info.messageId };
+    } catch (err) {
+      logger.error("brevo smtp sending failed", { err: String(err) });
+    }
+  }
+
+  // 3. Resend API (HTTP REST — zero SMTP port blocking)
   const resendApiKey = process.env.RESEND_API_KEY;
   if (resendApiKey) {
     try {
@@ -52,7 +150,7 @@ export async function sendEmail(opts: MailOptions): Promise<MailResult> {
     }
   }
 
-  // 2. Real SMTP (Gmail, Brevo, SendGrid, Mailgun, AWS SES, or custom SMTP)
+  // 4. Custom SMTP (Gmail, SendGrid, Mailgun, AWS SES, or custom SMTP)
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
   const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
@@ -86,7 +184,7 @@ export async function sendEmail(opts: MailOptions): Promise<MailResult> {
     }
   }
 
-  // 3. Ethereal Email Test Mailbox (Provides instant live viewable inbox link)
+  // 5. Ethereal Email Test Mailbox (Provides instant live viewable inbox link)
   try {
     const testAccount = await nodemailer.createTestAccount();
     const testTransporter = nodemailer.createTransport({
@@ -121,7 +219,7 @@ export async function sendEmail(opts: MailOptions): Promise<MailResult> {
     logger.debug("ethereal test mailer skipped or unavailable", { err: String(err) });
   }
 
-  // 4. Fallback Logger (Development / Preview without internet SMTP access)
+  // 6. Fallback Logger (Development / Preview without internet SMTP access)
   logger.info("auth otp email generated (preview delivery)", {
     to,
     subject,

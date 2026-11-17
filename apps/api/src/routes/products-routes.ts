@@ -155,6 +155,9 @@ export function registerProductsRoutes(
 
   // Public product info for checkout
   app.get("/v1/public/products/:id", async (req: FastifyRequest, reply: FastifyReply) => {
+    // Edge Cache Header: Cache at edge for 24h, stale-while-revalidate for 1h
+    reply.header("Cache-Control", "public, s-maxage=86400, stale-while-revalidate=3600");
+
     const { id } = req.params as { id: string };
     const product = (
       await db.select().from(products).where(eq(products.id, id)).limit(1)

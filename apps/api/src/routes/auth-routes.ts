@@ -75,7 +75,7 @@ export function registerAuthRoutes(
   const { db, sessionSecret, isSecureCookie } = options;
 
   // 1. Password Registration
-  app.post("/v1/auth/register", async (req: FastifyRequest, reply: FastifyReply) => {
+  const handleRegister = async (req: FastifyRequest, reply: FastifyReply) => {
     const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
     const regLimit = checkRateLimit(`register:${ip}`, 10, 60 * 60 * 1000);
     if (!regLimit.allowed) {
@@ -89,6 +89,13 @@ export function registerAuthRoutes(
     const email = body?.email?.trim().toLowerCase();
     const password = body?.password?.trim();
     const displayName = body?.displayName?.trim() || email?.split("@")[0] || "Creator";
+
+    if (process.env.PAUSE_SIGNUPS === "true") {
+      return reply.code(503).send({
+        code: "signups_paused",
+        message: "New account registrations are temporarily paused for maintenance.",
+      });
+    }
 
     if (!email || !email.includes("@")) {
       return reply.code(400).send({ code: "invalid_email", message: "Valid email is required" });
@@ -157,7 +164,10 @@ export function registerAuthRoutes(
       creator: { id: creator.id, slug: creator.slug, displayName: creator.displayName, plan: creator.plan },
       instagram: ig ? { id: ig.id, igUserId: ig.igUserId, username: ig.username } : null,
     };
-  });
+  };
+
+  app.post("/v1/auth/register", handleRegister);
+  app.post("/v1/auth/signup", handleRegister);
 
   // 2. Password Login
   app.post("/v1/auth/login", async (req: FastifyRequest, reply: FastifyReply) => {
@@ -239,6 +249,16 @@ export function registerAuthRoutes(
       return reply.code(400).send({ code: "invalid_email", message: "Valid email is required" });
     }
 
+    if (process.env.PAUSE_SIGNUPS === "true") {
+      const userExists = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
+      if (!userExists) {
+        return reply.code(503).send({
+          code: "signups_paused",
+          message: "New account registrations are temporarily paused for maintenance.",
+        });
+      }
+    }
+
     // 1. IP rate limiting: max 5 OTP requests per IP per 15 minutes
     const ipLimit = checkRateLimit(`otp_send_ip:${ip}`, 5, 15 * 60 * 1000);
     if (!ipLimit.allowed) {
@@ -286,7 +306,7 @@ export function registerAuthRoutes(
       ...(mailResult.previewUrl && process.env.NODE_ENV !== "production" ? { previewUrl: mailResult.previewUrl } : {}),
       message: mailResult.sent
         ? `Verification code sent to ${email}. Please check your inbox.`
-        : `Preview Code: ${code} (Auto-filled below). To receive real emails in your inbox, configure SMTP or RESEND_API_KEY in .env.`,
+        : `Preview Code: ${code} (Auto-filled below). To receive real emails in your inbox, configure BREVO_API_KEY in .env.`,
       ...(isOfflineFallback ? { code, debugOtp: code } : {}),
     };
   });

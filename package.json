@@ -16,6 +16,8 @@
     "db:seed": "pnpm --filter @hyperprofile/db seed",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
+    "backup": "tsx scripts/backup.ts",
+    "restore": "tsx scripts/restore.ts",
     "ci": "pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {

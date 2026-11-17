@@ -47,6 +47,26 @@ export function deriveWebhookEventIds(body: WebhookBody, raw: Buffer): string[] 
   return [...ids];
 }
 
+const dailyWebhookCounts = new Map<string, { count: number; resetAt: number }>();
+
+/**
+ * Section 7: Per-account daily webhook cap (5,000 webhooks / day)
+ * Protects Google Cloud Run free tier (2M requests/month allowance) from runaway viral Reel storms.
+ */
+export function checkDailyWebhookAllowance(igUserId: string, dailyCap = 5000): boolean {
+  const now = Date.now();
+  const entry = dailyWebhookCounts.get(igUserId);
+  if (!entry || entry.resetAt <= now) {
+    dailyWebhookCounts.set(igUserId, { count: 1, resetAt: now + 24 * 60 * 60 * 1000 });
+    return true;
+  }
+  if (entry.count >= dailyCap) {
+    return false;
+  }
+  entry.count++;
+  return true;
+}
+
 export function createInstagramWebhookHandlers(deps: InstagramWebhookDeps) {
   async function verifyGet(req: FastifyRequest, reply: FastifyReply) {
     const q = req.query as {
@@ -73,14 +93,11 @@ export function createInstagramWebhookHandlers(deps: InstagramWebhookDeps) {
       return reply.code(200).send("ok");
     }
 
-    // Ack fast — processing (claim/send) is step 4
-    reply.code(200).send("ok");
-
     try {
       const body = (req.body ?? {}) as WebhookBody;
       if (body.object !== "instagram" && body.object !== "page") {
         logger.warn("instagram webhook ignored object", { object: body.object });
-        return;
+        return reply.code(200).send("ok");
       }
 
       const eventIds = deriveWebhookEventIds(body, raw);
@@ -103,42 +120,58 @@ export function createInstagramWebhookHandlers(deps: InstagramWebhookDeps) {
           });
       }
 
-      if (deps.onPayload) {
+      // Check daily webhook cap per account to protect Cloud Run limits
+      let isThrottled = false;
+      for (const entry of body.entry ?? []) {
+        if (entry.id && !checkDailyWebhookAllowance(entry.id)) {
+          logger.warn("[WEBHOOK_THROTTLE] Daily webhook limit (5,000) reached for account, skipping payload processing", {
+            igUserId: entry.id,
+          });
+          isThrottled = true;
+          break;
+        }
+      }
+
+      if (!isThrottled && deps.onPayload) {
+        // Zero-Cost Invariant: Await processing inside incoming request budget before replying
+        // so Google Cloud Run does not throttle CPU post-response.
         await deps.onPayload(body);
       }
 
       // Conversational Instagram DM Processing (SuperProfile Follower Gate & DM Lead Capture)
-      for (const entry of body.entry ?? []) {
-        const igUserId = entry.id;
-        if (!igUserId) continue;
+      if (!isThrottled) {
+        for (const entry of body.entry ?? []) {
+          const igUserId = entry.id;
+          if (!igUserId) continue;
 
-        for (const msg of entry.messaging ?? []) {
-          const senderId = msg.sender?.id;
-          const text = (msg as any).message?.text;
-          if (senderId && text) {
-            await processIncomingDmMessage(deps.db, {
-              igUserId,
-              senderId,
-              text,
-              messageId: (msg as any).message?.mid,
-            });
-          }
-        }
-
-        for (const ch of entry.changes ?? []) {
-          if (ch.field === "messages") {
-            const val = ch.value as any;
-            const senderId = val?.from?.id;
-            const senderUsername = val?.from?.username;
-            const text = val?.text || val?.message;
+          for (const msg of entry.messaging ?? []) {
+            const senderId = msg.sender?.id;
+            const text = (msg as any).message?.text;
             if (senderId && text) {
               await processIncomingDmMessage(deps.db, {
                 igUserId,
                 senderId,
-                senderUsername,
                 text,
-                messageId: val?.id,
+                messageId: (msg as any).message?.mid,
               });
+            }
+          }
+
+          for (const ch of entry.changes ?? []) {
+            if (ch.field === "messages") {
+              const val = ch.value as any;
+              const senderId = val?.from?.id;
+              const senderUsername = val?.from?.username;
+              const text = val?.text || val?.message;
+              if (senderId && text) {
+                await processIncomingDmMessage(deps.db, {
+                  igUserId,
+                  senderId,
+                  senderUsername,
+                  text,
+                  messageId: val?.id,
+                });
+              }
             }
           }
         }
@@ -152,7 +185,9 @@ export function createInstagramWebhookHandlers(deps: InstagramWebhookDeps) {
       logger.error("instagram webhook handler error", {
         err: err instanceof Error ? err.message : String(err),
       });
-      // Already acknowledged — step 4 can reconcile unprocessed inbox rows
+    } finally {
+      // Always reply 200 to acknowledge Meta delivery
+      reply.code(200).send("ok");
     }
   }
 

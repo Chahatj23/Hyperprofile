@@ -52,3 +52,16 @@
 ## 2026-11-07 — Plan-Aware AutoDM Attribution Footer & 1000-Byte Guard
 **Decision:** AutoDM message generation appends an attribution footer (`\n\nSent via Hyperprofile`) for Free plan creators and omits it for paid plans (Creator/Studio). Enforced a strict 1000 UTF-8 bytes ceiling before message dispatch to satisfy Meta's private-reply character limits.
 **Why:** Section 4 requirement.
+
+## 2026-11-17 — Zero-Cost Launch Stack & Vercel Hobby Rejection
+**Decision:**
+1. **Rejection of Vercel Hobby:** Vercel Hobby strictly prohibits commercial use, meaning a commercial creator commerce platform with paid transactions violates terms.
+2. **Unified Container on Google Cloud Run (Mumbai):** Consolidate Next.js web application, Fastify API, webhook handlers, and job endpoints into a single Node.js container deployed to Cloud Run in Mumbai with scale-to-zero.
+3. **Cloudflare Edge Layer:** Cloudflare Free provides DNS, CDN caching for public creator pages (with purge-on-publish), WAF basics, and Cron Triggers.
+4. **Neon Free PostgreSQL with Database Sleep Guarantee:** No background polling loops or timers query the database. Neon sleeps after 5 minutes of idle time. Scheduled maintenance jobs run through Cloudflare Cron Triggers at 30+ minute intervals calling HMAC-signed internal endpoints.
+5. **PostgreSQL JobQueue (`SELECT ... FOR UPDATE SKIP LOCKED`):** Replace Redis & BullMQ with a database-backed `JobQueue` interface for Phases 0–4. Hourly send limits (700 DMs/hr) are enforced by counting sent rows in the last 60 minutes in Postgres.
+6. **In-Request Processing:** AutoDM webhook replies are dispatched directly within the incoming request context (under short execution budget), with rate-limited or over-cap jobs deferred to subsequent cron drains.
+7. **Cloudflare R2 Storage:** S3-compatible file storage with presigned URLs for digital product deliveries and invoices.
+8. **GitHub Actions Encrypted Backups:** Nightly encrypted `pg_dump` stored in R2 with 14-day retention.
+9. **Upgrade Ladder:** Follow `docs/UPGRADE_LADDER.md` to upgrade single hurting components only when concrete usage thresholds fire.
+**Why:** Maximizes runway and minimizes operational cost to ₹0 during validation (first 100–300 creators) while maintaining strict financial, security, and idempotency guarantees.

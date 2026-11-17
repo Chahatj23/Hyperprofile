@@ -1,0 +1,48 @@
+name: Nightly Encrypted Database Backup
+
+on:
+  schedule:
+    # Runs nightly at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Backup and Encrypt Neon Postgres to Cloudflare R2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js & pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install PostgreSQL Client Tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Execute Encrypted Backup Script
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY || secrets.SESSION_SECRET }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          pnpm tsx scripts/backup.ts
+
+      - name: Send Alert on Failure
+        if: failure()
+        run: |
+          echo "::error::Nightly database backup failed! Please check GitHub Actions logs immediately."

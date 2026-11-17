@@ -13,6 +13,7 @@ import {
 import { fetchIgReels, type IgMediaItem } from "@hyperprofile/meta";
 import { decryptAesGcm } from "@hyperprofile/shared";
 import { getSession } from "../auth/session.js";
+import { purgeCloudflareCache } from "../cloudflare/purge.js";
 
 const DEFAULT_BLOCKS: PageVersion = {
   title: "Welcome to my profile",
@@ -246,6 +247,13 @@ export function registerCreatorRoutes(
       after: { isPublished: true, publishedVersion: updated.publishedVersion },
     });
 
+    // Zero-Cost Architecture: Purge Cloudflare edge cache on page publish
+    const publicBaseUrl = process.env.WEB_ORIGIN || "https://hyperprofile.com";
+    await purgeCloudflareCache([
+      `${publicBaseUrl}/${auth.creator.slug}`,
+      `${publicBaseUrl}/v1/public/pages/${auth.creator.slug}`,
+    ]);
+
     return {
       success: true,
       publishedAt: updated.publishedAt,
@@ -256,6 +264,9 @@ export function registerCreatorRoutes(
 
   // Public endpoint for published page
   app.get("/v1/public/pages/:slug", async (req: FastifyRequest, reply: FastifyReply) => {
+    // Edge Cache Header: Cache at edge for 24h, stale-while-revalidate for 1h
+    reply.header("Cache-Control", "public, s-maxage=86400, stale-while-revalidate=3600");
+
     const { slug } = req.params as { slug: string };
     const normalized = slug?.toLowerCase();
 

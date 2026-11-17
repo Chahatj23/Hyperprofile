@@ -33,6 +33,12 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        source: "/:slug((?!dashboard|login|register|logout|connect|invoices|library|insights|checkout|terms|privacy|report|api|v1|_next|favicon.ico).*)",
+        headers: [
+          { key: "Cache-Control", value: "public, s-maxage=86400, stale-while-revalidate=3600" },
+        ],
+      },
     ];
   },
   async rewrites() {
