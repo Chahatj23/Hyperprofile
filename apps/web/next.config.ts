@@ -3,9 +3,7 @@ import type { NextConfig } from "next";
 const apiOrigin =
   process.env.API_ORIGIN ||
   process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production"
-    ? "https://hyperprofile-api.onrender.com"
-    : "http://127.0.0.1:4000");
+  "https://hyperprofile-api-p4a2.onrender.com";
 
 const nextConfig: NextConfig = {
   async headers() {
@@ -26,7 +24,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https://*.cdninstagram.com https://*.fbcdn.net https://images.unsplash.com https://*.rzp.io",
               "font-src 'self' https://fonts.gstatic.com data:",
-              "connect-src 'self' http://127.0.0.1:4000 http://localhost:4000 https://hyperprofile-api.onrender.com https://api.razorpay.com https://lumberjack.razorpay.com https://graph.facebook.com",
+              "connect-src 'self' http://127.0.0.1:4000 http://localhost:4000 https://hyperprofile-api-p4a2.onrender.com https://hyperprofile-api.onrender.com https://api.razorpay.com https://lumberjack.razorpay.com https://graph.facebook.com",
               "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
               "frame-ancestors 'self'",
             ].join("; "),

@@ -36,6 +36,7 @@ export function buildAuthorizeUrl(
     redirect_uri: cfg.redirectUri,
     response_type: "code",
     state,
+    auth_type: "rerequest",
   });
   return `https://www.facebook.com/dialog/oauth?${params.toString()}`;
 }

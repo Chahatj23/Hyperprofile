@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { creators, igAccounts, users, type Db } from "@hyperprofile/db";
 import { logger } from "@hyperprofile/shared";
 import { clearSessionCookie, getSession, setSessionCookie, signSession } from "../auth/session.js";
@@ -157,7 +157,14 @@ export function registerAuthRoutes(
 
     setSessionCookie(reply, token, isSecureCookie);
 
-    const ig = (await db.select().from(igAccounts).where(eq(igAccounts.creatorId, creator.id)).limit(1))[0];
+    const ig = (
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, creator.id))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+        .limit(1)
+    )[0];
 
     return {
       success: true,
@@ -231,7 +238,14 @@ export function registerAuthRoutes(
 
     setSessionCookie(reply, token, isSecureCookie);
 
-    const ig = (await db.select().from(igAccounts).where(eq(igAccounts.creatorId, creator.id)).limit(1))[0];
+    const ig = (
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, creator.id))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+        .limit(1)
+    )[0];
 
     return {
       success: true,
@@ -426,7 +440,14 @@ export function registerAuthRoutes(
 
     setSessionCookie(reply, token, isSecureCookie);
 
-    const ig = (await db.select().from(igAccounts).where(eq(igAccounts.creatorId, creator.id)).limit(1))[0];
+    const ig = (
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, creator.id))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+        .limit(1)
+    )[0];
 
     return {
       success: true,
@@ -467,7 +488,12 @@ export function registerAuthRoutes(
     }
 
     const ig = (
-      await db.select().from(igAccounts).where(eq(igAccounts.creatorId, creator.id)).limit(1)
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, creator.id))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+        .limit(1)
     )[0];
 
     return {

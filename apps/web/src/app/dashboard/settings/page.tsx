@@ -341,6 +341,21 @@ export default function SettingsPage() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Link
+                  href="/connect"
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "9px",
+                    background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+                    color: "#ffffff",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    textDecoration: "none",
+                  }}
+                >
+                  + Connect Another Account
+                </Link>
+
                 <a
                   href={`https://www.instagram.com/${igAccount.username}/`}
                   target="_blank"

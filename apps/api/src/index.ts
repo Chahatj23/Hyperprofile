@@ -585,8 +585,9 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
 app.get("/v1/auth/instagram/callback", handleInstagramCallback);
 app.get("/api/auth/instagram/callback", handleInstagramCallback);
 
-app.get("/api/auth/instagram/start", async (_req, reply) => {
-  return reply.redirect("/v1/auth/instagram/start");
+app.get("/api/auth/instagram/start", async (req, reply) => {
+  const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  return reply.redirect(`/v1/auth/instagram/start${qs}`);
 });
 
 /** Instagram webhooks — register all paths (direct API, Next /api rewrite, and /v1). */
@@ -606,7 +607,12 @@ app.get("/v1/ig/webhook-info", async (req) => {
   if (session?.creatorId) {
     try {
       const acct = (
-        await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+        await db
+          .select()
+          .from(igAccounts)
+          .where(eq(igAccounts.creatorId, session.creatorId))
+          .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+          .limit(1)
       )[0];
       if (acct) {
         connectedAccount = acct.username;
@@ -642,7 +648,12 @@ app.post("/v1/ig/webhook/test-event", async (req, reply) => {
   if (session?.creatorId) {
     try {
       const acct = (
-        await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+        await db
+          .select()
+          .from(igAccounts)
+          .where(eq(igAccounts.creatorId, session.creatorId))
+          .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+          .limit(1)
       )[0];
       if (acct?.igUserId) targetIgId = acct.igUserId;
     } catch {}
@@ -715,9 +726,11 @@ app.get("/v1/ig/accounts", async (req, reply) => {
             username: igAccounts.username,
             tokenExpiresAt: igAccounts.tokenExpiresAt,
             createdAt: igAccounts.createdAt,
+            updatedAt: igAccounts.updatedAt,
           })
           .from(igAccounts)
           .where(eq(igAccounts.creatorId, session.creatorId))
+          .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
           .limit(50)
       : [];
     if (rows.length > 0) return { data: rows };
@@ -742,6 +755,106 @@ app.get("/v1/ig/accounts", async (req, reply) => {
   }
 
   return { data: [] };
+});
+
+/** Switch active Instagram account for current creator workspace */
+app.post("/v1/ig/accounts/select", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session?.creatorId) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+  const body = (req.body ?? {}) as { id?: string; username?: string; igUserId?: string };
+  const condition = body.id
+    ? eq(igAccounts.id, body.id)
+    : body.igUserId
+    ? eq(igAccounts.igUserId, body.igUserId)
+    : body.username
+    ? eq(igAccounts.username, body.username)
+    : null;
+
+  if (!condition) {
+    return reply.code(400).send({ code: "missing_param", message: "Account ID, username or igUserId required" });
+  }
+
+  const updated = await db
+    .update(igAccounts)
+    .set({ updatedAt: new Date() })
+    .where(and(condition, eq(igAccounts.creatorId, session.creatorId)))
+    .returning();
+
+  if (!updated.length) {
+    return reply.code(404).send({ code: "not_found", message: "Account not found for this creator" });
+  }
+
+  return { ok: true, activeAccount: updated[0] };
+});
+
+/** Connect or reactivate an Instagram account for the creator */
+app.post("/v1/ig/accounts/connect", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session?.creatorId) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+  const body = (req.body ?? {}) as { username?: string; id?: string };
+  const username = body.username?.trim();
+  const id = body.id?.trim();
+  if (!username && !id) {
+    return reply.code(400).send({ code: "missing_param", message: "Username or id is required" });
+  }
+
+  const condition = id ? eq(igAccounts.id, id) : eq(igAccounts.username, username!);
+  const existing = (await db.select().from(igAccounts).where(condition).limit(1))[0];
+  if (!existing) {
+    return reply.code(404).send({ code: "not_found", message: "Instagram account not found in database" });
+  }
+
+  // Link to this creator and touch updatedAt to make it active
+  const updated = await db
+    .update(igAccounts)
+    .set({ creatorId: session.creatorId, updatedAt: new Date() })
+    .where(eq(igAccounts.id, existing.id))
+    .returning();
+
+  return { ok: true, account: updated[0] };
+});
+
+/** Unlink an Instagram account from current workspace */
+app.post("/v1/ig/accounts/unlink", async (req, reply) => {
+  const session = getSession(req, env.SESSION_SECRET);
+  if (!session?.creatorId) {
+    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
+  }
+  const body = (req.body ?? {}) as { id?: string; username?: string };
+  const condition = body.id
+    ? eq(igAccounts.id, body.id)
+    : body.username
+    ? eq(igAccounts.username, body.username)
+    : null;
+
+  if (condition) {
+    await db
+      .update(igAccounts)
+      .set({ creatorId: null, updatedAt: new Date() })
+      .where(and(condition, eq(igAccounts.creatorId, session.creatorId)));
+  } else {
+    // Unlink the most recently active account
+    const active = (
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, session.creatorId))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+        .limit(1)
+    )[0];
+    if (active) {
+      await db
+        .update(igAccounts)
+        .set({ creatorId: null, updatedAt: new Date() })
+        .where(eq(igAccounts.id, active.id));
+    }
+  }
+
+  return { ok: true, message: "Instagram account unlinked" };
 });
 
 /** Live Instagram profile + media + insights (token never returned). */
@@ -856,6 +969,7 @@ app.get("/v1/ig/overview", async (req, reply) => {
         .select()
         .from(igAccounts)
         .where(eq(igAccounts.creatorId, session.creatorId))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
         .limit(1)
     )[0];
     if (row) {
@@ -937,7 +1051,12 @@ app.get("/v1/ig/reels", async (req, reply) => {
   let account: { id: string; igUserId: string; username?: string; accessTokenEncrypted: string; createdAt: Date } | null = null;
   try {
     const row = (
-      await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, session.creatorId))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+        .limit(1)
     )[0];
     if (row) {
       account = {
@@ -1039,7 +1158,12 @@ app.get("/v1/ig/media", async (req, reply) => {
   let account: { id: string; igUserId: string; username?: string; accessTokenEncrypted: string; createdAt: Date } | null = null;
   try {
     const row = (
-      await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, session.creatorId))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+        .limit(1)
     )[0];
     if (row) {
       account = {
@@ -1116,7 +1240,12 @@ app.get("/v1/ig/activity", async (req, reply) => {
   let account: { id: string; igUserId: string; username?: string; accessTokenEncrypted: string; createdAt: Date } | null = null;
   try {
     const row = (
-      await db.select().from(igAccounts).where(eq(igAccounts.creatorId, session.creatorId)).limit(1)
+      await db
+        .select()
+        .from(igAccounts)
+        .where(eq(igAccounts.creatorId, session.creatorId))
+        .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
+        .limit(1)
     )[0];
     if (row) {
       account = {
