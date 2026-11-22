@@ -50,7 +50,15 @@ const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const parsed = envSchema.safeParse(source);
+  const cleaned: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value === "string") {
+      cleaned[key] = value.trim().replace(/^["']|["']$/g, "");
+    } else {
+      cleaned[key] = value;
+    }
+  }
+  const parsed = envSchema.safeParse(cleaned);
   if (!parsed.success) {
     const details = parsed.error.issues
       .map((i) => `${i.path.join(".")}: ${i.message}`)

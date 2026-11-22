@@ -3,7 +3,8 @@ import postgres from "postgres";
 import * as schema from "./schema.js";
 
 export function createDb(databaseUrl: string) {
-  const client = postgres(databaseUrl, { max: 10 });
+  const cleanUrl = databaseUrl.trim().replace(/^["']|["']$/g, "");
+  const client = postgres(cleanUrl, { max: 10 });
   return drizzle(client, { schema });
 }
 

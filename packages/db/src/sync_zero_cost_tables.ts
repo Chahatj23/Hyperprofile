@@ -10,21 +10,29 @@ const sql = postgres(url, { ssl: "require", max: 1 });
 async function run() {
   console.log("Ensuring zero-cost launch tables exist in Neon...");
 
+  await sql`DROP TABLE IF EXISTS "job_queue" CASCADE;`;
+
   await sql`
     CREATE TABLE IF NOT EXISTS "job_queue" (
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      "queue_name" text NOT NULL,
+      "queue" text DEFAULT 'default' NOT NULL,
       "payload" jsonb NOT NULL,
       "status" text DEFAULT 'pending' NOT NULL,
       "attempts" integer DEFAULT 0 NOT NULL,
-      "max_attempts" integer DEFAULT 3 NOT NULL,
-      "available_at" timestamp with time zone DEFAULT now() NOT NULL,
+      "max_attempts" integer DEFAULT 5 NOT NULL,
+      "run_at" timestamp with time zone DEFAULT now() NOT NULL,
+      "locked_at" timestamp with time zone,
+      "locked_by" text,
+      "last_error" text,
       "created_at" timestamp with time zone DEFAULT now() NOT NULL,
       "updated_at" timestamp with time zone DEFAULT now() NOT NULL
     );
   `;
   await sql`
-    CREATE INDEX IF NOT EXISTS "job_queue_fetch_idx" ON "job_queue" ("queue_name", "status", "available_at");
+    CREATE INDEX IF NOT EXISTS "job_queue_status_run_idx" ON "job_queue" ("status", "run_at");
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS "job_queue_queue_status_idx" ON "job_queue" ("queue", "status");
   `;
 
   await sql`
