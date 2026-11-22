@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: hyperprofile-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    healthCheckPath: /v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: ENABLE_BACKGROUND_POLLERS
+        value: "false"
+      - key: SESSION_SECRET
+        value: 0gbOZdANTyH7kv94F25G8PDEYpior6aQWlRStcLjIsnJmwzX
+      - key: TOKEN_ENCRYPTION_KEY
+        value: ef790d2297091a8e591a09e50073d0928934364e40e6bdd02950812f6688c742
+      - key: META_APP_ID
+        value: "2808976552852144"
+      - key: META_APP_SECRET
+        value: a312f94abdf3e10375d1f0610af75e6e
+      - key: META_LOGIN_CONFIG_ID
+        value: "1131117443101525"
+      - key: META_WEBHOOK_VERIFY_TOKEN
+        value: vg0p4acutjrfdi62n8lko7mysh3q5x9w
+      - key: META_GRAPH_VERSION
+        value: v21.0
+      - key: META_INSTAGRAM_ACCOUNT_ID
+        value: "17841453478293915"
+      - key: META_BUSINESS_PORTFOLIO_ID
+        value: "2654567394963774"
+      - key: PAUSE_AUTODM
+        value: "false"
+      - key: PAUSE_SIGNUPS
+        value: "false"
+      - key: PAUSE_CHECKOUT
+        value: "false"
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_ewyBbR0sP3Co@ep-spring-mountain-azf3l1in-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require
+      - key: DATABASE_URL_UNPOOLED
+        value: postgresql://neondb_owner:npg_ewyBbR0sP3Co@ep-spring-mountain-azf3l1in.c-3.ap-southeast-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require
