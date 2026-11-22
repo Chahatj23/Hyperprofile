@@ -27,6 +27,8 @@ services:
         value: vg0p4acutjrfdi62n8lko7mysh3q5x9w
       - key: META_GRAPH_VERSION
         value: v21.0
+      - key: META_REDIRECT_URI
+        value: https://hyperprofile-api-p4a2.onrender.com/v1/auth/instagram/callback
       - key: META_INSTAGRAM_ACCOUNT_ID
         value: "17841453478293915"
       - key: META_BUSINESS_PORTFOLIO_ID
