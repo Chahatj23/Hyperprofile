@@ -75,7 +75,7 @@ async function markEvent(
   }
 }
 
-async function processJob(cfg: QueueConfig, job: ReplyJob): Promise<"done" | "retry"> {
+export async function processJob(cfg: QueueConfig, job: ReplyJob): Promise<"done" | "retry"> {
   let tokenEncrypted: string | null = null;
 
   // 1. Fetch from DB first (cloud truth on Render)

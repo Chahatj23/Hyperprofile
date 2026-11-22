@@ -12,7 +12,7 @@ services:
       - key: PORT
         value: "10000"
       - key: ENABLE_BACKGROUND_POLLERS
-        value: "false"
+        value: "true"
       - key: SESSION_SECRET
         value: 0gbOZdANTyH7kv94F25G8PDEYpior6aQWlRStcLjIsnJmwzX
       - key: TOKEN_ENCRYPTION_KEY

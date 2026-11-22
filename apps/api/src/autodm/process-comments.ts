@@ -11,7 +11,7 @@ import { logger } from "@hyperprofile/shared";
 import { claimComment } from "./claim.js";
 import { createDmSession } from "./conversation.js";
 import { maybeTrackedLink } from "./links.js";
-import { enqueueReply } from "./queue.js";
+import { enqueueReply, processJob } from "./queue.js";
 import { recordActivity } from "./activity-store.js";
 
 function resolveRulesFile(): string {
@@ -87,7 +87,11 @@ function buildMessage(
 export async function processCommentWebhook(
   db: Db,
   body: WebhookBody,
-  opts: { publicBaseUrl: string },
+  opts: {
+    publicBaseUrl: string;
+    tokenEncryptionKey?: string;
+    graphVersion?: string;
+  },
 ): Promise<{
   claimed: number;
   skipped: number;
@@ -283,6 +287,40 @@ export async function processCommentWebhook(
         publicReplyTemplates.length > 0
           ? publicReplyTemplates[Math.floor(Math.random() * publicReplyTemplates.length)]
           : null;
+
+      // Immediate Synchronous Dispatch (Zero-Cost / Scale-to-Zero invariant)
+      const encKey = opts.tokenEncryptionKey || process.env.TOKEN_ENCRYPTION_KEY;
+      if (encKey) {
+        try {
+          const res = await processJob(
+            {
+              db,
+              tokenEncryptionKey: encKey,
+              graphVersion: opts.graphVersion || process.env.META_GRAPH_VERSION || "v21.0",
+              hourlyCap: 700,
+              replyWindowMs: 7 * 24 * 60 * 60 * 1000,
+            },
+            {
+              igUserId,
+              commentId: v.id,
+              username,
+              text: dmText,
+              publicReply: chosenPublicReply ?? null,
+              receivedAt: Date.now(),
+              notBefore: Date.now(),
+              attempts: 0,
+            },
+          );
+          if (res === "done") {
+            claimed++;
+            continue;
+          }
+        } catch (dispatchErr) {
+          logger.warn("immediate autodm dispatch failed, enqueuing for retry", {
+            err: dispatchErr instanceof Error ? dispatchErr.message : String(dispatchErr),
+          });
+        }
+      }
 
       // Zero-Cost Architecture: Persist to Postgres Job Queue for durability and Cloudflare Cron drain
       try {

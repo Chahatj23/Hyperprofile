@@ -168,6 +168,8 @@ const igWebhooks = createInstagramWebhookHandlers({
   onPayload: async (body) => {
     await processCommentWebhook(db, body as Parameters<typeof processCommentWebhook>[1], {
       publicBaseUrl: env.WEB_ORIGIN,
+      tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
+      graphVersion: env.META_GRAPH_VERSION,
     });
   },
 });
