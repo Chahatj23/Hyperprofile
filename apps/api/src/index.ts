@@ -590,11 +590,13 @@ app.get("/api/auth/instagram/start", async (_req, reply) => {
   return reply.redirect("/v1/auth/instagram/start");
 });
 
-/** Instagram webhooks — register both paths (direct API + via Next /api rewrite). */
+/** Instagram webhooks — register all paths (direct API, Next /api rewrite, and /v1). */
 app.get("/webhooks/instagram", igWebhooks.verifyGet);
 app.post("/webhooks/instagram", igWebhooks.receivePost);
 app.get("/api/webhooks/instagram", igWebhooks.verifyGet);
 app.post("/api/webhooks/instagram", igWebhooks.receivePost);
+app.get("/v1/webhooks/instagram", igWebhooks.verifyGet);
+app.post("/v1/webhooks/instagram", igWebhooks.receivePost);
 
 /** Dynamic webhook & active poller information for dashboard status. */
 app.get("/v1/ig/webhook-info", async (req) => {
@@ -696,6 +698,8 @@ app.post("/webhooks/payments", paymentWebhooks.handlePaymentWebhook);
 app.post("/webhooks/razorpay", paymentWebhooks.handlePaymentWebhook);
 app.post("/api/webhooks/payments", paymentWebhooks.handlePaymentWebhook);
 app.post("/api/webhooks/razorpay", paymentWebhooks.handlePaymentWebhook);
+app.post("/v1/webhooks/payments", paymentWebhooks.handlePaymentWebhook);
+app.post("/v1/webhooks/razorpay", paymentWebhooks.handlePaymentWebhook);
 
 app.get("/v1/ig/accounts", async (req, reply) => {
   const session = getSession(req, env.SESSION_SECRET);
