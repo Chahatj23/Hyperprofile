@@ -445,9 +445,6 @@ const handleInstagramCallback = async (req: FastifyRequest, reply: FastifyReply)
       ...(env.META_BUSINESS_PORTFOLIO_ID
         ? { businessId: env.META_BUSINESS_PORTFOLIO_ID }
         : {}),
-      ...(process.env.META_INSTAGRAM_ACCOUNT_ID
-        ? { knownInstagramId: process.env.META_INSTAGRAM_ACCOUNT_ID }
-        : {}),
     });
     const encrypted = encryptAesGcm(token.accessToken, env.TOKEN_ENCRYPTION_KEY);
     const expiresAt =

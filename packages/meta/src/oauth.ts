@@ -239,66 +239,7 @@ export async function fetchInstagramProfile(
     // Proceed to Facebook Graph edges
   }
 
-  // 2) Candidate Instagram account & Page IDs from config
-  const candidateIds = [
-    opts.knownInstagramId,
-    process.env.META_INSTAGRAM_ACCOUNT_ID,
-    process.env.META_PAGE_ID,
-    "17841453478293915",
-    "1491036870755985",
-  ].filter(Boolean) as string[];
-
-  for (const cid of candidateIds) {
-    // A) Try as direct Instagram user node
-    const userJson = await graphGet(
-      `${base}/${cid}`,
-      accessToken,
-      "id,name,username,profile_picture_url,followers_count,follows_count,media_count",
-    );
-    attempts.push({ path: `/${cid} (ig_user)`, json: userJson });
-    const profile = profileFromIgNode(userJson, userJson);
-    if (profile) return profile;
-
-    // B) Try as Page or Business Asset node
-    const assetJson = await graphGet(
-      `${base}/${cid}`,
-      accessToken,
-      "id,name,ig_user_id,instagram_business_account{id,username,name,profile_picture_url},connected_instagram_account{id,username,name,profile_picture_url}",
-    );
-    attempts.push({ path: `/${cid} (asset_or_page)`, json: assetJson });
-
-    // If page has a linked IG account ID without username, query the IG node directly
-    const linkedIg =
-      (assetJson.instagram_business_account as Record<string, unknown> | undefined) ||
-      (assetJson.connected_instagram_account as Record<string, unknown> | undefined);
-    if (linkedIg?.id) {
-      if (linkedIg.username) {
-        const p = profileFromIgNode(linkedIg, assetJson);
-        if (p) return p;
-      }
-      const igUser = await graphGet(
-        `${base}/${linkedIg.id}`,
-        accessToken,
-        "id,username,name,profile_picture_url",
-      );
-      attempts.push({ path: `/${linkedIg.id} (from asset linked ig)`, json: igUser });
-      const p = profileFromIgNode(igUser, assetJson);
-      if (p) return p;
-    }
-
-    if (assetJson.ig_user_id) {
-      const igUser = await graphGet(
-        `${base}/${assetJson.ig_user_id}`,
-        accessToken,
-        "id,username,name,profile_picture_url",
-      );
-      attempts.push({ path: `/${assetJson.ig_user_id} (from asset ig_user_id)`, json: igUser });
-      const p = profileFromIgNode(igUser, assetJson);
-      if (p) return p;
-    }
-  }
-
-  // 3) Business Login: granular_scopes carry Instagram asset target_ids
+  // 2) Business Login: debug_token granular_scopes carry the exact Instagram asset target_ids authorized in this session
   if (opts.appAccessToken) {
     const debugUrl = new URL(`${base}/debug_token`);
     debugUrl.searchParams.set("input_token", accessToken);
@@ -399,6 +340,63 @@ export async function fetchInstagramProfile(
       }
     } catch (e) {
       attempts.push({ path: "/debug_token_error", error: String(e) });
+    }
+  }
+
+  // 3) Fallback: candidate Instagram account & Page IDs if specifically provided
+  const candidateIds = [
+    opts.knownInstagramId,
+    process.env.META_INSTAGRAM_ACCOUNT_ID,
+    process.env.META_PAGE_ID,
+  ].filter(Boolean) as string[];
+
+  for (const cid of candidateIds) {
+    // A) Try as direct Instagram user node
+    const userJson = await graphGet(
+      `${base}/${cid}`,
+      accessToken,
+      "id,name,username,profile_picture_url,followers_count,follows_count,media_count",
+    );
+    attempts.push({ path: `/${cid} (ig_user)`, json: userJson });
+    const profile = profileFromIgNode(userJson, userJson);
+    if (profile) return profile;
+
+    // B) Try as Page or Business Asset node
+    const assetJson = await graphGet(
+      `${base}/${cid}`,
+      accessToken,
+      "id,name,ig_user_id,instagram_business_account{id,username,name,profile_picture_url},connected_instagram_account{id,username,name,profile_picture_url}",
+    );
+    attempts.push({ path: `/${cid} (asset_or_page)`, json: assetJson });
+
+    // If page has a linked IG account ID without username, query the IG node directly
+    const linkedIg =
+      (assetJson.instagram_business_account as Record<string, unknown> | undefined) ||
+      (assetJson.connected_instagram_account as Record<string, unknown> | undefined);
+    if (linkedIg?.id) {
+      if (linkedIg.username) {
+        const p = profileFromIgNode(linkedIg, assetJson);
+        if (p) return p;
+      }
+      const igUser = await graphGet(
+        `${base}/${linkedIg.id}`,
+        accessToken,
+        "id,username,name,profile_picture_url",
+      );
+      attempts.push({ path: `/${linkedIg.id} (from asset linked ig)`, json: igUser });
+      const p = profileFromIgNode(igUser, assetJson);
+      if (p) return p;
+    }
+
+    if (assetJson.ig_user_id) {
+      const igUser = await graphGet(
+        `${base}/${assetJson.ig_user_id}`,
+        accessToken,
+        "id,username,name,profile_picture_url",
+      );
+      attempts.push({ path: `/${assetJson.ig_user_id} (from asset ig_user_id)`, json: igUser });
+      const p = profileFromIgNode(igUser, assetJson);
+      if (p) return p;
     }
   }
 
