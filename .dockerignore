@@ -1,0 +1,15 @@
+node_modules
+.git
+.gitignore
+.github
+*.log
+.env
+.env.local
+.env.development
+.env.test
+apps/web/.next
+apps/api/dist
+packages/*/dist
+coverage
+.turbo
+.cache

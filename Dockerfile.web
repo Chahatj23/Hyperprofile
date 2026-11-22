@@ -1,0 +1,31 @@
+# Production Dockerfile for Hyperprofile Web (Next.js on Google Cloud Run)
+FROM node:20-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+FROM base AS builder
+WORKDIR /app
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/ ./packages/
+COPY apps/web/ ./apps/web/
+RUN pnpm install --frozen-lockfile
+ENV NODE_ENV=production
+RUN pnpm --filter @hyperprofile/web build
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=8080
+
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/next.config.ts ./apps/web/next.config.ts
+
+EXPOSE 8080
+CMD ["pnpm", "--filter", "@hyperprofile/web", "start", "-p", "8080"]
