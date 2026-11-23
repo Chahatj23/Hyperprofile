@@ -11,6 +11,8 @@ services:
         value: production
       - key: PORT
         value: "10000"
+      - key: WEB_ORIGIN
+        value: "https://hyperprofile-web.onrender.com"
       - key: ENABLE_BACKGROUND_POLLERS
         value: "true"
       - key: SESSION_SECRET
