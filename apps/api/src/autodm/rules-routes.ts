@@ -120,14 +120,15 @@ export function registerRulesRoutes(
       });
     }
     const body = parsed.data;
-    const igUserId = callerIgUserId || body.igUserId;
 
-    if (!igUserId) {
+    // SEC-S1-04: Strict tenant isolation - user can only create rules for their own verified connected account
+    if (!callerIgUserId) {
       return reply.code(400).send({
         code: "no_instagram_account",
-        message: "Please connect your Instagram account first before creating AutoDM rules.",
+        message: "Please connect your Instagram account first via /connect before creating AutoDM rules.",
       });
     }
+    const igUserId = callerIgUserId;
 
     const ruleRecord = {
       id: `rule_${crypto.randomUUID().slice(0, 8)}`,
@@ -263,7 +264,7 @@ export function registerRulesRoutes(
     const disk = loadDiskRules();
     const idx = disk.findIndex((r) => r.id === id);
     if (idx !== -1) {
-      if (callerIgUserId && disk[idx].igUserId && disk[idx].igUserId !== callerIgUserId) {
+      if (!callerIgUserId || (disk[idx].igUserId && disk[idx].igUserId !== callerIgUserId)) {
         return reply.code(403).send({
           code: "forbidden",
           message: "You do not have permission to modify this rule",
@@ -284,11 +285,7 @@ export function registerRulesRoutes(
           ...(patch.mediaId !== undefined ? { mediaId: patch.mediaId } : {}),
           updatedAt: new Date(),
         })
-        .where(
-          callerIgUserId
-            ? and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId))
-            : eq(automationRules.id, id),
-        )
+        .where(and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId)))
         .catch(() => {});
 
       return { data: disk[idx] };
@@ -309,7 +306,7 @@ export function registerRulesRoutes(
     if (!rule) {
       return reply.code(404).send({ code: "not_found", message: "Rule not found" });
     }
-    if (callerIgUserId && rule.igUserId && rule.igUserId !== callerIgUserId) {
+    if (!callerIgUserId || (rule.igUserId && rule.igUserId !== callerIgUserId)) {
       return reply.code(403).send({
         code: "forbidden",
         message: "You do not have permission to delete this rule",
@@ -323,11 +320,7 @@ export function registerRulesRoutes(
     // Background delete from DB
     deps.db
       .delete(automationRules)
-      .where(
-        callerIgUserId
-          ? and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId))
-          : eq(automationRules.id, id),
-      )
+      .where(and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId)))
       .catch(() => {});
 
     return { ok: true };

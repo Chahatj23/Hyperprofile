@@ -26,7 +26,11 @@ export function verifySession(token: string, secret: string): SessionPayload | n
     const [encoded, signature] = token.split(".");
     if (!encoded || !signature) return null;
     const expected = crypto.createHmac("sha256", secret).update(encoded).digest("base64url");
-    if (signature !== expected) return null;
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return null;
+    }
 
     const data = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as SessionPayload;
     if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null;

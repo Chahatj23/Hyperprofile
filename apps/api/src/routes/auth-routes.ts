@@ -200,6 +200,10 @@ export function registerAuthRoutes(
 
     const user = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
     if (!user || !user.passwordHash) {
+      // Prevent user enumeration via timing attack with constant dummy scrypt evaluation
+      const dummySalt = "00000000000000000000000000000000";
+      const dummyKey = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+      await verifyPassword(password, `${dummySalt}:${dummyKey}`);
       return reply.code(401).send({ code: "invalid_credentials", message: "Invalid email or password" });
     }
 
@@ -313,6 +317,15 @@ export function registerAuthRoutes(
 
     const mailResult = await sendOtpEmail(email, code);
 
+    // SEC-S1-07: In production, NEVER return OTP codes in HTTP body or message strings
+    if (!mailResult.sent && process.env.NODE_ENV === "production") {
+      logger.error("otp email delivery failed in production", { email, provider: mailResult.provider });
+      return reply.code(500).send({
+        code: "email_delivery_failed",
+        message: "Failed to deliver verification code email. Please verify your email address or try again later.",
+      });
+    }
+
     const isOfflineFallback = !mailResult.sent && process.env.NODE_ENV !== "production";
 
     return {
@@ -322,7 +335,7 @@ export function registerAuthRoutes(
       ...(mailResult.previewUrl && process.env.NODE_ENV !== "production" ? { previewUrl: mailResult.previewUrl } : {}),
       message: mailResult.sent
         ? `Verification code sent to ${email}. Please check your inbox.`
-        : `Preview Code: ${code} (Auto-filled below). To receive real emails in your inbox, configure BREVO_API_KEY in .env.`,
+        : `Preview Code: ${code} (Auto-filled below for development).`,
       ...(isOfflineFallback ? { code, debugOtp: code } : {}),
     };
   });
