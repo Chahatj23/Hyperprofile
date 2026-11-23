@@ -21,7 +21,14 @@ export function middleware(request: NextRequest) {
   }
 
   // 2. Protect all /dashboard routes, /connect, and /insights from unauthenticated access
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/connect") || pathname.startsWith("/insights")) {
+  if (
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/connect" ||
+    pathname.startsWith("/connect/") ||
+    pathname === "/insights" ||
+    pathname.startsWith("/insights/")
+  ) {
     const sessionCookie = request.cookies.get("hp_session");
 
     if (!sessionCookie || !sessionCookie.value) {
@@ -36,9 +43,12 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/dashboard",
     "/dashboard/:path*",
     "/connect",
+    "/connect/:path*",
     "/insights",
+    "/insights/:path*",
   ],
 };
 

@@ -35,20 +35,6 @@ function ConnectInner() {
   }
 
   async function launchWorkspace(dest: string) {
-    const token = typeof window !== "undefined" ? localStorage.getItem("hp_token") : null;
-    const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) authHeaders.Authorization = `Bearer ${token}`;
-
-    if (connectedAccount) {
-      try {
-        await fetch("/v1/ig/accounts/connect", {
-          method: "POST",
-          headers: authHeaders,
-          credentials: "include",
-          body: JSON.stringify({ username: connectedAccount }),
-        });
-      } catch {}
-    }
     window.location.href = dest;
   }
 
@@ -121,10 +107,17 @@ function ConnectInner() {
             if (authData.instagram?.username) {
               setConnectedAccount(authData.instagram.username);
             }
+          } else {
+            window.location.href = "/login?next=/connect";
+            return;
           }
+        } else {
+          window.location.href = "/login?next=/connect";
+          return;
         }
       } catch {
-        // Continue even if unauthenticated
+        window.location.href = "/login?next=/connect";
+        return;
       }
 
       try {
@@ -465,42 +458,6 @@ function ConnectInner() {
             >
               Connect via Facebook Page / Business Suite &rarr;
             </a>
-
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  const token = typeof window !== "undefined" ? localStorage.getItem("hp_token") : null;
-                  const headers: Record<string, string> = { "Content-Type": "application/json" };
-                  if (token) headers.Authorization = `Bearer ${token}`;
-                  const res = await fetch("/v1/ig/accounts/connect", {
-                    method: "POST",
-                    headers,
-                    credentials: "include",
-                    body: JSON.stringify({ username: "jinbandhan" }),
-                  });
-                  if (res.ok) {
-                    setConnectedAccount("jinbandhan");
-                    setActionMsg("Verified profile @jinbandhan connected successfully ✓");
-                    setTimeout(() => setActionMsg(null), 3500);
-                  }
-                } catch (e) {
-                  alert("Quick connect failed: " + String(e));
-                }
-              }}
-              style={{
-                padding: "11px 20px",
-                borderRadius: "10px",
-                background: "rgba(232, 165, 75, 0.12)",
-                color: "var(--accent)",
-                border: "1px dashed var(--accent)",
-                fontWeight: 600,
-                fontSize: "0.88rem",
-                cursor: "pointer",
-              }}
-            >
-              ⚡ Quick Connect Verified Profile (@jinbandhan)
-            </button>
           </div>
 
           <div style={{ borderTop: "1px solid var(--line)", paddingTop: "16px", fontSize: "0.82rem", color: "var(--muted)", lineHeight: 1.6 }}>

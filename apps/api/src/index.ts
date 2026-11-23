@@ -6,8 +6,8 @@ import dotenv from "dotenv";
 import Fastify, { type FastifyRequest, type FastifyReply } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
-import { and, desc, eq, ne } from "drizzle-orm";
-import { automationEvents, buyers, createDb, creators, igAccounts, pageEvents, users } from "@hyperprofile/db";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { automationEvents, buyers, createDb, creators, igAccounts, pageEvents, pages, users } from "@hyperprofile/db";
 import {
   buildAuthorizeUrl,
   exchangeCodeForToken,
@@ -283,41 +283,6 @@ app.get("/healthz", async () => ({
   phase: 0,
   time: new Date().toISOString(),
 }));
-
-function resolveAccountFile(): string {
-  const p1 = path.resolve(process.cwd(), "real-ig-account.json");
-  if (fs.existsSync(p1)) return p1;
-  const p2 = path.resolve(process.cwd(), "apps/api/real-ig-account.json");
-  if (fs.existsSync(p2)) return p2;
-  const p3 = path.resolve("e:/Full Stack/apps/api/real-ig-account.json");
-  if (fs.existsSync(p3)) return p3;
-  const p4 = path.resolve("d:/Full Stack/apps/api/real-ig-account.json");
-  if (fs.existsSync(p4)) return p4;
-  return p1;
-}
-
-function saveRealAccountToFile(account: Record<string, unknown>) {
-  try {
-    const file = resolveAccountFile();
-    fs.writeFileSync(file, JSON.stringify(account, null, 2), "utf8");
-    logger.info("real ig account saved to local disk store", { username: account.username, file });
-  } catch (err) {
-    logger.error("failed to save account file", { err: String(err) });
-  }
-}
-
-function loadRealAccountFromFile(): Record<string, any> | null {
-  try {
-    const file = resolveAccountFile();
-    if (fs.existsSync(file)) {
-      const data = fs.readFileSync(file, "utf8");
-      return JSON.parse(data);
-    }
-  } catch (err) {
-    logger.warn("failed to read real account file", { err: String(err) });
-  }
-  return null;
-}
 
 app.get("/v1/health", async () => ({ ok: true, version: "v1" }));
 
@@ -733,25 +698,9 @@ app.get("/v1/ig/accounts", async (req, reply) => {
           .orderBy(desc(igAccounts.updatedAt), desc(igAccounts.createdAt))
           .limit(50)
       : [];
-    if (rows.length > 0) return { data: rows };
+    return { data: rows };
   } catch (err) {
     logger.warn("database query failed for ig_accounts", { err: String(err) });
-  }
-
-  // Fallback to local verified account store if DB has not linked yet
-  const saved = loadRealAccountFromFile();
-  if (saved?.username && saved?.igUserId) {
-    return {
-      data: [
-        {
-          id: saved.id ?? `ig_${saved.igUserId}`,
-          igUserId: saved.igUserId,
-          username: saved.username,
-          tokenExpiresAt: saved.tokenExpiresAt ? new Date(saved.tokenExpiresAt) : null,
-          createdAt: saved.createdAt ? new Date(saved.createdAt) : new Date(),
-        },
-      ],
-    };
   }
 
   return { data: [] };
@@ -805,7 +754,15 @@ app.post("/v1/ig/accounts/connect", async (req, reply) => {
   const condition = id ? eq(igAccounts.id, id) : eq(igAccounts.username, username!);
   const existing = (await db.select().from(igAccounts).where(condition).limit(1))[0];
   if (!existing) {
-    return reply.code(404).send({ code: "not_found", message: "Instagram account not found in database" });
+    return reply.code(404).send({ code: "not_found", message: "Instagram account not found in database. Connect via Meta OAuth." });
+  }
+
+  // Prevent account takeover / cross-creator hijacking: an account already assigned to another creator cannot be claimed
+  if (existing.creatorId && existing.creatorId !== session.creatorId) {
+    return reply.code(409).send({
+      code: "account_conflict",
+      message: "This Instagram account is already connected to another creator profile.",
+    });
   }
 
   // Link to this creator and touch updatedAt to make it active
@@ -1308,11 +1265,12 @@ app.get("/v1/ig/activity", async (req, reply) => {
     // db fallback
   }
 
-  // Fetch any Page/Profile visitor events
+  // Fetch any Page/Profile visitor events strictly for this creator's storefront pages
   try {
     const pageRows = await db
       .select()
       .from(pageEvents)
+      .where(eq(pageEvents.creatorId, session.creatorId))
       .orderBy(desc(pageEvents.createdAt))
       .limit(10);
 
@@ -1332,12 +1290,16 @@ app.get("/v1/ig/activity", async (req, reply) => {
     // db fallback
   }
 
-  // Merge persisted disk activities (comments, likes, delivered AutoDMs, leads)
+  // Merge persisted disk activities for this specific connected account
   try {
     const diskActivities = loadStoredActivities();
     const existingIds = new Set(activities.map((a) => a.id));
     for (const da of diskActivities) {
-      if (!existingIds.has(da.id)) {
+      const matchesAccount =
+        (da.meta?.igUserId && da.meta.igUserId === account.igUserId) ||
+        (da.meta?.owner_id && da.meta.owner_id === account.igUserId) ||
+        (da.actor && account.username && da.actor.toLowerCase() === account.username.toLowerCase());
+      if (matchesAccount && !existingIds.has(da.id)) {
         activities.push(da as any);
         existingIds.add(da.id);
       }
@@ -1437,16 +1399,6 @@ app.post("/v1/ig/autodm/test-send", async (req, reply) => {
     }
   } catch {
     // fallback
-  }
-
-  if (!account) {
-    const saved = loadRealAccountFromFile();
-    if (saved?.accessTokenEncrypted && saved?.igUserId) {
-      account = {
-        igUserId: saved.igUserId,
-        accessTokenEncrypted: saved.accessTokenEncrypted,
-      };
-    }
   }
 
   if (!account) {

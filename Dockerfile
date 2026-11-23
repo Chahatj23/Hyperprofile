@@ -24,12 +24,5 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/ ./packages/
 COPY --from=builder /app/apps/api/ ./apps/api/
 
-# Optional disk storage fallback for rules, account and activity
-COPY *real-ig-account.jso[n] ./
-COPY *real-ig-rules.jso[n] ./
-COPY *real-ig-activity.jso[n] ./
-COPY *claimed-comments.jso[n] ./
-RUN touch real-ig-account.json real-ig-rules.json real-ig-activity.json claimed-comments.json || true
-
 EXPOSE 8080
 CMD ["node", "apps/api/dist/index.js"]

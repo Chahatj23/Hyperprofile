@@ -6,26 +6,6 @@ import { decryptAesGcm, logger } from "@hyperprofile/shared";
 import { isCommentClaimed } from "./claim.js";
 import { processCommentWebhook } from "./process-comments.js";
 
-function resolveAccountFile(): string {
-  const p1 = path.resolve(process.cwd(), "real-ig-account.json");
-  if (fs.existsSync(p1)) return p1;
-  const p2 = path.resolve(process.cwd(), "apps", "api", "real-ig-account.json");
-  if (fs.existsSync(p2)) return p2;
-  const p3 = path.resolve(process.cwd(), "..", "..", "real-ig-account.json");
-  if (fs.existsSync(p3)) return p3;
-  return p1;
-}
-
-function resolveRulesFile(): string {
-  const local = path.resolve(process.cwd(), "real-ig-rules.json");
-  if (fs.existsSync(local)) return local;
-  const workspaceRoot = path.resolve(process.cwd(), "..", "..", "real-ig-rules.json");
-  if (fs.existsSync(workspaceRoot)) return workspaceRoot;
-  const apiSubdir = path.resolve(process.cwd(), "apps", "api", "real-ig-rules.json");
-  if (fs.existsSync(apiSubdir)) return apiSubdir;
-  return local;
-}
-
 export type CommentPollerConfig = {
   db: Db;
   tokenEncryptionKey: string;
@@ -97,35 +77,12 @@ export async function pollActiveCommentsOnce(cfg: CommentPollerConfig): Promise<
     });
   }
 
-  // Fallback to disk / env if DB did not provide token
-  if (!accessToken) {
-    try {
-      const acctPath = resolveAccountFile();
-      if (fs.existsSync(acctPath)) {
-        const acct = JSON.parse(fs.readFileSync(acctPath, "utf8"));
-        if (acct?.accessTokenEncrypted) {
-          accessToken = decryptAesGcm(acct.accessTokenEncrypted, cfg.tokenEncryptionKey);
-        }
-        if (acct?.igUserId) defaultIgUserId = acct.igUserId;
-      } else if (process.env.IG_ACCOUNT_DATA) {
-        const acct = JSON.parse(process.env.IG_ACCOUNT_DATA);
-        if (acct?.accessTokenEncrypted) {
-          accessToken = decryptAesGcm(acct.accessTokenEncrypted, cfg.tokenEncryptionKey);
-        }
-        if (acct?.igUserId) defaultIgUserId = acct.igUserId;
-      }
-    } catch (err) {
-      stats.lastError = `Token decrypt failed: ${err instanceof Error ? err.message : String(err)}`;
-      return { checked: 0, recovered: 0 };
-    }
-  }
-
   if (!accessToken) {
     stats.lastError = "No access token found for comment polling";
     return { checked: 0, recovered: 0 };
   }
 
-  // 2. Resolve Active Rules directly from DB first
+  // 2. Resolve Active Rules directly from DB
   let rules: Array<any> = [];
   try {
     const dbRules = await cfg.db
@@ -140,17 +97,6 @@ export async function pollActiveCommentsOnce(cfg: CommentPollerConfig): Promise<
     logger.warn("comment poller db rules query warning", {
       err: err instanceof Error ? err.message : String(err),
     });
-  }
-
-  if (rules.length === 0) {
-    try {
-      const rulesPath = resolveRulesFile();
-      if (fs.existsSync(rulesPath)) {
-        rules = JSON.parse(fs.readFileSync(rulesPath, "utf8")).filter((r: any) => r.active);
-      }
-    } catch {
-      // fallback
-    }
   }
 
   if (rules.length === 0) {

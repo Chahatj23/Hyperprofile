@@ -36,9 +36,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           }
         }
         setIsAuthenticated(false);
+        try {
+          document.cookie = "hp_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          localStorage.removeItem("hp_token");
+        } catch {}
         window.location.href = `/login?next=${encodeURIComponent(pathname)}`;
       } catch {
         setIsAuthenticated(false);
+        try {
+          document.cookie = "hp_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          localStorage.removeItem("hp_token");
+        } catch {}
         window.location.href = `/login?next=${encodeURIComponent(pathname)}`;
       } finally {
         setAuthLoading(false);
@@ -500,6 +508,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             onClick={async () => {
               try {
                 await fetch("/v1/auth/logout", { method: "POST", credentials: "include" });
+              } catch {}
+              try {
+                document.cookie = "hp_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                localStorage.removeItem("hp_token");
+                sessionStorage.clear();
               } catch {}
               window.location.href = "/login";
             }}

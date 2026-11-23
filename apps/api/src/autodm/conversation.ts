@@ -125,22 +125,7 @@ async function resolveToken(db: Db, igUserId: string): Promise<string | null> {
       return decryptAesGcm(row.accessTokenEncrypted, encKey);
     }
   } catch {
-    // fallback to disk
-  }
-
-  const diskPath = path.resolve(process.cwd(), "real-ig-account.json");
-  if (fs.existsSync(diskPath)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(diskPath, "utf8"));
-      if (data.accessTokenEncrypted && encKey) {
-        return decryptAesGcm(data.accessTokenEncrypted, encKey);
-      }
-      if (data.accessToken) {
-        return data.accessToken;
-      }
-    } catch {
-      // ignore
-    }
+    // ignore
   }
 
   return process.env.META_USER_ACCESS_TOKEN ?? null;

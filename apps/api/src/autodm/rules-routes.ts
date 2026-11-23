@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import crypto from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
@@ -7,60 +5,6 @@ import { z } from "zod";
 import { automationRules, igAccounts, type Db } from "@hyperprofile/db";
 import { queueDepth } from "./queue.js";
 import { getSession } from "../auth/session.js";
-
-function resolveAccountFile(): string {
-  const local = path.resolve(process.cwd(), "real-ig-account.json");
-  if (fs.existsSync(local)) return local;
-  const workspaceRoot = path.resolve(process.cwd(), "..", "..", "real-ig-account.json");
-  if (fs.existsSync(workspaceRoot)) return workspaceRoot;
-  const apiSubdir = path.resolve(process.cwd(), "apps", "api", "real-ig-account.json");
-  if (fs.existsSync(apiSubdir)) return apiSubdir;
-  return local;
-}
-
-function resolveRulesFile(): string {
-  const local = path.resolve(process.cwd(), "real-ig-rules.json");
-  if (fs.existsSync(local)) return local;
-  const workspaceRoot = path.resolve(process.cwd(), "..", "..", "real-ig-rules.json");
-  if (fs.existsSync(workspaceRoot)) return workspaceRoot;
-  const apiSubdir = path.resolve(process.cwd(), "apps", "api", "real-ig-rules.json");
-  if (fs.existsSync(apiSubdir)) return apiSubdir;
-  return local;
-}
-
-function getConnectedIgUserId(): string | null {
-  try {
-    const file = resolveAccountFile();
-    if (fs.existsSync(file)) {
-      const data = JSON.parse(fs.readFileSync(file, "utf8"));
-      if (data?.igUserId) return data.igUserId;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-function loadDiskRules(): Array<any> {
-  try {
-    const file = resolveRulesFile();
-    if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, "utf8"));
-    }
-  } catch {
-    // ignore
-  }
-  return [];
-}
-
-function saveDiskRules(rules: Array<any>): void {
-  try {
-    const file = resolveRulesFile();
-    fs.writeFileSync(file, JSON.stringify(rules, null, 2), "utf8");
-  } catch {
-    // ignore
-  }
-}
 
 const createRuleSchema = z.object({
   igUserId: z.string().optional(),
@@ -130,8 +74,9 @@ export function registerRulesRoutes(
     }
     const igUserId = callerIgUserId;
 
+    const ruleId = `rule_${crypto.randomUUID().slice(0, 8)}`;
     const ruleRecord = {
-      id: `rule_${crypto.randomUUID().slice(0, 8)}`,
+      id: ruleId,
       igUserId,
       name: body.name || (body.keyword ? `${body.keyword} Automation` : "Default AutoDM"),
       keyword: body.keyword ?? "",
@@ -152,15 +97,8 @@ export function registerRulesRoutes(
       updatedAt: new Date().toISOString(),
     };
 
-    // Instant save to disk (0ms latency)
-    const disk = loadDiskRules();
-    disk.unshift(ruleRecord);
-    saveDiskRules(disk);
-
-    // Background sync to DB if reachable
-    deps.db
-      .insert(automationRules)
-      .values({
+    try {
+      await deps.db.insert(automationRules).values({
         id: ruleRecord.id,
         igUserId,
         keyword: body.keyword ?? "",
@@ -168,8 +106,10 @@ export function registerRulesRoutes(
         message: body.message,
         link: body.link ?? null,
         active: body.active ?? true,
-      })
-      .catch(() => {});
+      });
+    } catch (err) {
+      // ignore
+    }
 
     return { data: ruleRecord };
   });
@@ -194,23 +134,15 @@ export function registerRulesRoutes(
 
     const igUserId = callerIgUserId;
 
-    // 1. Fetch DB rules first (cloud truth on Render)
     try {
       const dbRules = await deps.db
         .select()
         .from(automationRules)
         .where(eq(automationRules.igUserId, igUserId));
-      if (dbRules && dbRules.length > 0) {
-        return { data: dbRules, connected: true };
-      }
+      return { data: dbRules ?? [], connected: true };
     } catch {
-      // fallback
+      return { data: [], connected: true };
     }
-
-    // 2. Fallback to disk rules
-    const disk = loadDiskRules();
-    const filtered = disk.filter((r) => r.igUserId === igUserId);
-    return { data: filtered, connected: true };
   });
 
   async function resolveCallerIgUserId(creatorId?: string): Promise<string | null> {
@@ -261,21 +193,23 @@ export function registerRulesRoutes(
 
     // SEC-S1-04: Enforce object-level ownership check (IDOR protection)
     const callerIgUserId = await resolveCallerIgUserId(session.creatorId);
-    const disk = loadDiskRules();
-    const idx = disk.findIndex((r) => r.id === id);
-    if (idx !== -1) {
-      if (!callerIgUserId || (disk[idx].igUserId && disk[idx].igUserId !== callerIgUserId)) {
+    if (!callerIgUserId) {
+      return reply.code(403).send({ code: "forbidden", message: "You do not have permission to modify this rule" });
+    }
+
+    try {
+      const existing = (await deps.db.select().from(automationRules).where(eq(automationRules.id, id)).limit(1))[0];
+      if (!existing) {
+        return reply.code(404).send({ code: "not_found", message: "Rule not found" });
+      }
+      if (existing.igUserId !== callerIgUserId) {
         return reply.code(403).send({
           code: "forbidden",
           message: "You do not have permission to modify this rule",
         });
       }
 
-      disk[idx] = { ...disk[idx], ...patch, updatedAt: new Date().toISOString() };
-      saveDiskRules(disk);
-
-      // Background sync to DB
-      deps.db
+      const updated = await deps.db
         .update(automationRules)
         .set({
           ...(patch.active !== undefined ? { active: patch.active } : {}),
@@ -286,11 +220,12 @@ export function registerRulesRoutes(
           updatedAt: new Date(),
         })
         .where(and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId)))
-        .catch(() => {});
+        .returning();
 
-      return { data: disk[idx] };
+      return { data: updated[0] };
+    } catch {
+      return reply.code(404).send({ code: "not_found", message: "Rule not found" });
     }
-    return reply.code(404).send({ code: "not_found", message: "Rule not found" });
   });
 
   app.delete("/v1/ig/rules/:id", async (req: FastifyRequest, reply: FastifyReply) => {
@@ -301,34 +236,36 @@ export function registerRulesRoutes(
 
     // SEC-S1-04: Enforce object-level ownership check (IDOR protection)
     const callerIgUserId = await resolveCallerIgUserId(session.creatorId);
-    const disk = loadDiskRules();
-    const rule = disk.find((r) => r.id === id);
-    if (!rule) {
+    if (!callerIgUserId) {
+      return reply.code(403).send({ code: "forbidden", message: "You do not have permission to delete this rule" });
+    }
+
+    try {
+      const existing = (await deps.db.select().from(automationRules).where(eq(automationRules.id, id)).limit(1))[0];
+      if (!existing) {
+        return reply.code(404).send({ code: "not_found", message: "Rule not found" });
+      }
+      if (existing.igUserId !== callerIgUserId) {
+        return reply.code(403).send({
+          code: "forbidden",
+          message: "You do not have permission to delete this rule",
+        });
+      }
+
+      await deps.db
+        .delete(automationRules)
+        .where(and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId)));
+
+      return { ok: true };
+    } catch {
       return reply.code(404).send({ code: "not_found", message: "Rule not found" });
     }
-    if (!callerIgUserId || (rule.igUserId && rule.igUserId !== callerIgUserId)) {
-      return reply.code(403).send({
-        code: "forbidden",
-        message: "You do not have permission to delete this rule",
-      });
-    }
-
-    // Instant delete from disk
-    const updatedDisk = disk.filter((r) => r.id !== id);
-    saveDiskRules(updatedDisk);
-
-    // Background delete from DB
-    deps.db
-      .delete(automationRules)
-      .where(and(eq(automationRules.id, id), eq(automationRules.igUserId, callerIgUserId)))
-      .catch(() => {});
-
-    return { ok: true };
   });
 
   app.get("/v1/ig/autodm/status", async (req: FastifyRequest, reply: FastifyReply) => {
     const session = requireSession(req, reply);
-    if (!session) return;
+    if (!session?.creatorId) return;
+    const creatorId = session.creatorId;
 
     try {
       const accounts = await deps.db
@@ -339,40 +276,18 @@ export function registerRulesRoutes(
           tokenExpiresAt: igAccounts.tokenExpiresAt,
         })
         .from(igAccounts)
+        .where(eq(igAccounts.creatorId, creatorId))
         .limit(50);
-      if (accounts.length > 0) {
-        return {
-          queueDepth: queueDepth(),
-          accounts,
-        };
-      }
-    } catch {
-      // db offline fallback
-    }
 
-    let accounts: Array<any> = [];
-    try {
-      const file = resolveAccountFile();
-      if (fs.existsSync(file)) {
-        const data = JSON.parse(fs.readFileSync(file, "utf8"));
-        if (data?.igUserId) {
-          accounts = [
-            {
-              igUserId: data.igUserId,
-              username: data.username,
-              reauthRequiredAt: null,
-              tokenExpiresAt: data.tokenExpiresAt ? new Date(data.tokenExpiresAt) : null,
-            },
-          ];
-        }
-      }
+      return {
+        queueDepth: queueDepth(),
+        accounts: accounts ?? [],
+      };
     } catch {
-      // ignore
+      return {
+        queueDepth: queueDepth(),
+        accounts: [],
+      };
     }
-
-    return {
-      queueDepth: queueDepth(),
-      accounts,
-    };
   });
 }

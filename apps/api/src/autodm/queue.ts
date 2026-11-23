@@ -6,16 +6,6 @@ import { MetaError, sendPrivateReply, sendPublicCommentReply } from "@hyperprofi
 import { decryptAesGcm, logger } from "@hyperprofile/shared";
 import { recordActivity } from "./activity-store.js";
 
-function resolveAccountFile(): string {
-  const p1 = path.resolve(process.cwd(), "real-ig-account.json");
-  if (fs.existsSync(p1)) return p1;
-  const p2 = path.resolve(process.cwd(), "apps", "api", "real-ig-account.json");
-  if (fs.existsSync(p2)) return p2;
-  const p3 = path.resolve(process.cwd(), "..", "..", "real-ig-account.json");
-  if (fs.existsSync(p3)) return p3;
-  return p1;
-}
-
 export type ReplyJob = {
   igUserId: string;
   commentId: string;
@@ -94,26 +84,6 @@ export async function processJob(cfg: QueueConfig, job: ReplyJob): Promise<"done
     logger.warn("processJob db token query warning", {
       err: err instanceof Error ? err.message : String(err),
     });
-  }
-
-  // 2. Fall back to disk account resolution if DB didn't find token
-  if (!tokenEncrypted) {
-    try {
-      const file = resolveAccountFile();
-      if (fs.existsSync(file)) {
-        const saved = JSON.parse(fs.readFileSync(file, "utf8"));
-        if (saved?.accessTokenEncrypted && (saved.igUserId === job.igUserId || !saved.igUserId)) {
-          tokenEncrypted = saved.accessTokenEncrypted;
-        }
-      } else if (process.env.IG_ACCOUNT_DATA) {
-        const saved = JSON.parse(process.env.IG_ACCOUNT_DATA);
-        if (saved?.accessTokenEncrypted && (saved.igUserId === job.igUserId || !saved.igUserId)) {
-          tokenEncrypted = saved.accessTokenEncrypted;
-        }
-      }
-    } catch {
-      // ignore
-    }
   }
 
   if (!tokenEncrypted) {

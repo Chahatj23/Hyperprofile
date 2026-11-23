@@ -27,12 +27,20 @@ function resolveActivityFile(): string {
   return p1;
 }
 
-export function loadStoredActivities(): ActivityItem[] {
+export function loadStoredActivities(igUserId?: string): ActivityItem[] {
   try {
     const file = resolveActivityFile();
     if (fs.existsSync(file)) {
       const data = fs.readFileSync(file, "utf8");
-      return JSON.parse(data);
+      const list: ActivityItem[] = JSON.parse(data);
+      if (igUserId) {
+        return list.filter(
+          (a) =>
+            (a.meta?.igUserId && a.meta.igUserId === igUserId) ||
+            (a.meta?.owner_id && a.meta.owner_id === igUserId),
+        );
+      }
+      return list;
     }
   } catch (err) {
     logger.warn("failed to read activity file", { err: String(err) });
@@ -48,11 +56,6 @@ export function saveStoredActivities(activities: ActivityItem[]): void {
     logger.warn("failed to save activity file", { err: String(err) });
   }
 }
-
-const DEFAULT_COVER =
-  "https://scontent.cdninstagram.com/v/t51.82787-15/902591685_18018037013782610_3825906834077676673_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=108&ccb=7-5&_nc_sid=18de74&efg=eyJlZmdfdGFnIjoiRkVFRC5iZXN0X2ltYWdlX3VybGdlbi5DMyJ9&_nc_ohc=cIslFHlfRXYQ7kNvwG7THzu&_nc_oc=Ado8JQLtL-9kSJ_uzsjYIsCrfBod1wSvjJlcuIS65lmmxw3bfCrN2yNDnNzRcOVQl5II1X174y_ptxu_KjzjBGNY&_nc_zt=23&_nc_ht=scontent.cdninstagram.com&edm=AFF3FJ0EAAAA&_nc_gid=fyYPK9HgWZG2H34RI1UEFQ&oh=00_AQREFB_QCZeM8xTlqv-Fjz0GXoX2bN3faBsw0M-4RDIUGg&oe=6AF9C2D4";
-const DEFAULT_CAPTION =
-  "Jai Jinendra 🙏 Jab baat jeevan saathi chunne ki aati hai, tab sanskaar aur values sabse pehle aate hain. Jinbandhan par aapko milte hain verified Jain profiles...";
 
 export function recordActivity(
   item: Omit<ActivityItem, "id" | "timestamp"> & { id?: string; timestamp?: string },
@@ -72,8 +75,8 @@ export function recordActivity(
 
   const entry: ActivityItem = {
     ...item,
-    mediaThumbnail: item.mediaThumbnail || DEFAULT_COVER,
-    mediaCaption: item.mediaCaption || DEFAULT_CAPTION,
+    mediaThumbnail: item.mediaThumbnail,
+    mediaCaption: item.mediaCaption,
     id: item.id || `act_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`,
     timestamp: item.timestamp || new Date().toISOString(),
   };

@@ -14,37 +14,6 @@ import { maybeTrackedLink } from "./links.js";
 import { enqueueReply, processJob } from "./queue.js";
 import { recordActivity } from "./activity-store.js";
 
-function resolveRulesFile(): string {
-  const local = path.resolve(process.cwd(), "real-ig-rules.json");
-  if (fs.existsSync(local)) return local;
-  const workspaceRoot = path.resolve(process.cwd(), "..", "..", "real-ig-rules.json");
-  if (fs.existsSync(workspaceRoot)) return workspaceRoot;
-  const apiSubdir = path.resolve(process.cwd(), "apps", "api", "real-ig-rules.json");
-  if (fs.existsSync(apiSubdir)) return apiSubdir;
-  return local;
-}
-
-function loadDiskRules(): Array<any> {
-  try {
-    const file = resolveRulesFile();
-    if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, "utf8"));
-    }
-  } catch {
-    // ignore
-  }
-  return [];
-}
-
-function saveDiskRules(rules: Array<any>): void {
-  try {
-    const file = resolveRulesFile();
-    fs.writeFileSync(file, JSON.stringify(rules, null, 2), "utf8");
-  } catch {
-    // ignore
-  }
-}
-
 type WebhookBody = {
   object?: string;
   entry?: Array<{
@@ -151,13 +120,6 @@ export async function processCommentWebhook(
       });
     }
 
-    // 2. Fall back to disk rules if DB returned empty
-    if (rules.length === 0) {
-      rules = loadDiskRules().filter(
-        (r: any) => (!r.igUserId || r.igUserId === igUserId) && r.active,
-      );
-    }
-
     // If no active rules are configured for this account, skip processing
     if (rules.length === 0) {
       continue;
@@ -219,14 +181,12 @@ export async function processCommentWebhook(
         continue;
       }
 
-      // Increment runs count on the triggered rule
+      // Update rule timestamp in database
       try {
-        const disk = loadDiskRules();
-        const found = disk.find((r: any) => r.id === rule.id);
-        if (found) {
-          found.runsCount = (found.runsCount || 0) + 1;
-          saveDiskRules(disk);
-        }
+        await db
+          .update(automationRules)
+          .set({ updatedAt: new Date() })
+          .where(eq(automationRules.id, rule.id));
       } catch {
         // ignore
       }

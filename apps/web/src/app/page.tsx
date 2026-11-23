@@ -117,8 +117,7 @@ export default function HomePage() {
           {/* Right Action CTA */}
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <Link
-              href="/jinbandhan"
-              target="_blank"
+              href="/login"
               style={{
                 padding: "8px 16px",
                 borderRadius: "10px",
@@ -130,21 +129,7 @@ export default function HomePage() {
                 transition: "background 0.15s ease",
               }}
             >
-              Live Demo ↗
-            </Link>
-            <Link
-              href="/login"
-              style={{
-                padding: "8px 16px",
-                borderRadius: "10px",
-                color: "#ffffff",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                fontSize: "0.88rem",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              Log In
+              Sign In
             </Link>
             <Link
               href="/login?mode=register"
@@ -243,8 +228,7 @@ export default function HomePage() {
             Launch AutoDM Dashboard →
           </Link>
           <Link
-            href="/jinbandhan"
-            target="_blank"
+            href="/login?mode=register"
             style={{
               padding: "14px 28px",
               borderRadius: "12px",
@@ -256,7 +240,7 @@ export default function HomePage() {
               textDecoration: "none",
             }}
           >
-            Preview Creator Store ↗
+            Create Your Account →
           </Link>
         </div>
 
