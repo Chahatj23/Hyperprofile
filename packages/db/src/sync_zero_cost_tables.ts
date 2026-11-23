@@ -2,15 +2,16 @@ import postgres from "postgres";
 
 const url =
   process.env.DATABASE_URL_UNPOOLED ||
-  process.env.DATABASE_URL ||
-  "postgresql://neondb_owner:npg_ewyBbR0sP3Co@ep-spring-mountain-azf3l1in.c-3.ap-southeast-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require";
+  process.env.DATABASE_URL;
+
+if (!url) {
+  throw new Error("DATABASE_URL or DATABASE_URL_UNPOOLED is required to sync tables.");
+}
 
 const sql = postgres(url, { ssl: "require", max: 1 });
 
 async function run() {
   console.log("Ensuring zero-cost launch tables exist in Neon...");
-
-  await sql`DROP TABLE IF EXISTS "job_queue" CASCADE;`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS "job_queue" (
