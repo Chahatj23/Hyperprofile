@@ -65,7 +65,7 @@ export default function HomePage() {
           {/* Navigation Links */}
           <nav style={{ display: "flex", alignItems: "center", gap: "28px" }}>
             <Link
-              href="/dashboard/autodm"
+              href="/features"
               style={{
                 color: "#94a3b8",
                 textDecoration: "none",
@@ -74,34 +74,10 @@ export default function HomePage() {
                 transition: "color 0.15s ease",
               }}
             >
-              AutoDM
+              Features
             </Link>
             <Link
-              href="/dashboard/products"
-              style={{
-                color: "#94a3b8",
-                textDecoration: "none",
-                fontSize: "0.9rem",
-                fontWeight: 600,
-                transition: "color 0.15s ease",
-              }}
-            >
-              Digital Store
-            </Link>
-            <Link
-              href="/dashboard/leads"
-              style={{
-                color: "#94a3b8",
-                textDecoration: "none",
-                fontSize: "0.9rem",
-                fontWeight: 600,
-                transition: "color 0.15s ease",
-              }}
-            >
-              Leads CRM
-            </Link>
-            <Link
-              href="/dashboard/settings"
+              href="/pricing"
               style={{
                 color: "#94a3b8",
                 textDecoration: "none",
@@ -111,6 +87,18 @@ export default function HomePage() {
               }}
             >
               Pricing
+            </Link>
+            <Link
+              href="/about"
+              style={{
+                color: "#94a3b8",
+                textDecoration: "none",
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                transition: "color 0.15s ease",
+              }}
+            >
+              About
             </Link>
           </nav>
 
@@ -213,7 +201,7 @@ export default function HomePage() {
         {/* Action CTAs */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "48px" }}>
           <Link
-            href="/dashboard/autodm"
+            href="/register"
             style={{
               padding: "14px 32px",
               borderRadius: "12px",
@@ -225,10 +213,10 @@ export default function HomePage() {
               boxShadow: "0 4px 20px rgba(0, 102, 254, 0.4)",
             }}
           >
-            Launch AutoDM Dashboard →
+            Get Started Free →
           </Link>
           <Link
-            href="/login?mode=register"
+            href="/features"
             style={{
               padding: "14px 28px",
               borderRadius: "12px",
@@ -240,7 +228,7 @@ export default function HomePage() {
               textDecoration: "none",
             }}
           >
-            Create Your Account →
+            Explore Features →
           </Link>
         </div>
 
@@ -324,7 +312,7 @@ export default function HomePage() {
               </p>
             </div>
             <Link
-              href="/dashboard/autodm"
+              href="/features"
               style={{
                 marginTop: "24px",
                 color: "#60a5fa",
@@ -336,7 +324,7 @@ export default function HomePage() {
                 gap: "6px",
               }}
             >
-              Configure AutoDM Rules →
+              Learn About AutoDM →
             </Link>
           </div>
 
@@ -375,7 +363,7 @@ export default function HomePage() {
               </p>
             </div>
             <Link
-              href="/dashboard/products"
+              href="/features"
               style={{
                 marginTop: "24px",
                 color: "#34d399",
@@ -387,7 +375,7 @@ export default function HomePage() {
                 gap: "6px",
               }}
             >
-              Manage Products & Pricing →
+              See Storefront & UPI Features →
             </Link>
           </div>
 
@@ -426,7 +414,7 @@ export default function HomePage() {
               </p>
             </div>
             <Link
-              href="/dashboard/leads"
+              href="/features"
               style={{
                 marginTop: "24px",
                 color: "#38bdf8",
@@ -438,7 +426,7 @@ export default function HomePage() {
                 gap: "6px",
               }}
             >
-              Explore CRM Leads →
+              Audience CRM Details →
             </Link>
           </div>
         </div>
@@ -484,17 +472,14 @@ export default function HomePage() {
           </div>
 
           <div style={{ display: "flex", gap: "24px", fontSize: "0.85rem", color: "#94a3b8" }}>
-            <Link href="/privacy" style={{ color: "inherit", textDecoration: "none" }}>
-              Privacy Policy
+            <Link href="/features" style={{ color: "inherit", textDecoration: "none" }}>
+              Features
             </Link>
-            <Link href="/terms" style={{ color: "inherit", textDecoration: "none" }}>
-              Terms of Service
+            <Link href="/pricing" style={{ color: "inherit", textDecoration: "none" }}>
+              Pricing
             </Link>
-            <Link href="/report" style={{ color: "inherit", textDecoration: "none" }}>
-              Report Abuse
-            </Link>
-            <Link href="/dashboard/settings" style={{ color: "inherit", textDecoration: "none" }}>
-              Settings & Plans
+            <Link href="/about" style={{ color: "inherit", textDecoration: "none" }}>
+              About
             </Link>
           </div>
         </div>
