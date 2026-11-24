@@ -35,19 +35,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             return;
           }
         }
+        // In demo mode: visitor is exploring the interactive product without an active session
         setIsAuthenticated(false);
-        try {
-          document.cookie = "hp_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-          localStorage.removeItem("hp_token");
-        } catch {}
-        window.location.href = `/login?next=${encodeURIComponent(pathname)}`;
+        setCreatorUser({
+          displayName: "Demo Creator",
+          slug: "demo",
+          username: "demo_creator",
+          email: "demo@superprofile.bio",
+        });
       } catch {
         setIsAuthenticated(false);
-        try {
-          document.cookie = "hp_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-          localStorage.removeItem("hp_token");
-        } catch {}
-        window.location.href = `/login?next=${encodeURIComponent(pathname)}`;
+        setCreatorUser({
+          displayName: "Demo Creator",
+          slug: "demo",
+          username: "demo_creator",
+          email: "demo@superprofile.bio",
+        });
       } finally {
         setAuthLoading(false);
       }
@@ -111,119 +114,84 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // 2. Unauthenticated Barrier: Protects private account data in Incognito or logged out sessions
-  if (!isAuthenticated) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#0a0e17",
-          padding: "20px",
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-        }}
-      >
+  // 2. Render Full Workspace with Demo Banner if unauthenticated
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f8fafc", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
+      {/* Interactive Demo Mode Banner for Visitors (like Superprofile.bio) */}
+      {!isAuthenticated && (
         <div
           style={{
-            width: "min(420px, 100%)",
-            background: "#ffffff",
-            borderRadius: "24px",
-            padding: "40px 32px",
-            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-            textAlign: "center",
+            background: "linear-gradient(90deg, #1e293b 0%, #0f172a 100%)",
+            color: "#f8fafc",
+            padding: "10px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            position: "sticky",
+            top: 0,
+            zIndex: 100,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
           }}
         >
-          <div
-            style={{
-              width: "56px",
-              height: "56px",
-              borderRadius: "16px",
-              background: "linear-gradient(135deg, #0284c7 0%, #0066fe 100%)",
-              color: "#ffffff",
-              display: "grid",
-              placeItems: "center",
-              fontSize: "1.6rem",
-              fontWeight: 800,
-              margin: "0 auto 18px",
-              boxShadow: "0 4px 14px rgba(0, 102, 254, 0.35)",
-            }}
-          >
-            🔒
-          </div>
-          <h1
-            style={{
-              fontSize: "1.4rem",
-              fontWeight: 800,
-              color: "#0f172a",
-              margin: "0 0 8px",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Protected Creator Workspace
-          </h1>
-          <p
-            style={{
-              fontSize: "0.9rem",
-              color: "#64748b",
-              margin: "0 0 24px",
-              lineHeight: 1.5,
-            }}
-          >
-            Redirecting to sign-in portal. Please authenticate with your creator credentials to access your workspace.
-          </p>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <Link
-              href={`/login?next=${encodeURIComponent(pathname)}`}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                padding: "13px 20px",
-                borderRadius: "12px",
-                background: "linear-gradient(135deg, #0284c7 0%, #0066fe 100%)",
-                color: "#ffffff",
-                fontSize: "0.95rem",
-                fontWeight: 700,
-                textDecoration: "none",
-                boxShadow: "0 4px 14px rgba(0, 102, 254, 0.35)",
+                background: "rgba(0, 102, 254, 0.2)",
+                border: "1px solid #0066fe",
+                color: "#60a5fa",
+                fontSize: "0.75rem",
+                fontWeight: 800,
+                padding: "2px 8px",
+                borderRadius: "6px",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
               }}
             >
-              <span>🔑</span>
-              <span>Sign In with Email &amp; Password →</span>
-            </Link>
+              Demo Preview
+            </span>
+            <span style={{ fontSize: "0.88rem", fontWeight: 500, color: "#cbd5e1" }}>
+              You are exploring the live interactive workspace as a visitor. Create an account to connect your own store &amp; Instagram.
+            </span>
+          </div>
 
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Link
+              href="/login"
+              style={{
+                color: "#94a3b8",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                textDecoration: "none",
+                padding: "6px 12px",
+                borderRadius: "8px",
+                transition: "color 0.15s ease",
+              }}
+            >
+              Sign In
+            </Link>
             <Link
               href="/login?mode=register"
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                padding: "12px 20px",
-                borderRadius: "12px",
-                background: "#f8fafc",
-                color: "#0f172a",
-                border: "1px solid #e2e8f0",
-                fontSize: "0.9rem",
+                background: "linear-gradient(135deg, #0284c7 0%, #0066fe 100%)",
+                color: "#ffffff",
+                fontSize: "0.85rem",
                 fontWeight: 700,
+                padding: "7px 16px",
+                borderRadius: "8px",
                 textDecoration: "none",
+                boxShadow: "0 2px 8px rgba(0, 102, 254, 0.35)",
               }}
             >
-              <span>✦</span>
-              <span>Create Free Creator Account</span>
+              Claim Your Profile →
             </Link>
           </div>
         </div>
-      </div>
-    );
-  }
+      )}
 
-  // 3. Authenticated Session: Render Full Creator Workspace
-  return (
-    <div style={{ minHeight: "100vh", display: "flex", background: "#f8fafc", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
+      <div style={{ flex: 1, display: "flex", minHeight: "100%" }}>
       {/* SuperProfile Left Sidebar */}
       <aside
         style={{
@@ -502,39 +470,65 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span style={{ color: "#64748b", fontSize: "0.8rem" }}>⚙</span>
           </Link>
 
-          {/* Log Out Button */}
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await fetch("/v1/auth/logout", { method: "POST", credentials: "include" });
-              } catch {}
-              try {
-                document.cookie = "hp_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-                localStorage.removeItem("hp_token");
-                sessionStorage.clear();
-              } catch {}
-              window.location.href = "/login";
-            }}
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: "10px",
-              background: "rgba(239, 68, 68, 0.08)",
-              border: "1px solid rgba(239, 68, 68, 0.2)",
-              color: "#f87171",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-            }}
-          >
-            <span>🚪</span>
-            <span>Log Out</span>
-          </button>
+          {/* Log Out Button (or Sign In CTA if in Demo mode) */}
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await fetch("/v1/auth/logout", { method: "POST", credentials: "include" });
+                } catch {}
+                try {
+                  document.cookie = "hp_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                  localStorage.removeItem("hp_token");
+                  sessionStorage.clear();
+                } catch {}
+                window.location.href = "/login";
+              }}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: "10px",
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+                color: "#f87171",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+              }}
+            >
+              <span>🚪</span>
+              <span>Log Out</span>
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: "10px",
+                background: "linear-gradient(135deg, #0284c7 0%, #0066fe 100%)",
+                border: "none",
+                color: "#ffffff",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                textDecoration: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                boxSizing: "border-box",
+                boxShadow: "0 2px 8px rgba(0, 102, 254, 0.35)",
+              }}
+            >
+              <span>✨</span>
+              <span>Sign In / Create Account</span>
+            </Link>
+          )}
         </div>
       </aside>
 
@@ -553,6 +547,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {children}
       </main>
+      </div>
     </div>
   );
 }
