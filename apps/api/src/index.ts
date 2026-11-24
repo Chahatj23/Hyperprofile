@@ -738,42 +738,7 @@ app.post("/v1/ig/accounts/select", async (req, reply) => {
   return { ok: true, activeAccount: updated[0] };
 });
 
-/** Connect or reactivate an Instagram account for the creator */
-app.post("/v1/ig/accounts/connect", async (req, reply) => {
-  const session = getSession(req, env.SESSION_SECRET);
-  if (!session?.creatorId) {
-    return reply.code(401).send({ code: "unauthorized", message: "Not authenticated" });
-  }
-  const body = (req.body ?? {}) as { username?: string; id?: string };
-  const username = body.username?.trim();
-  const id = body.id?.trim();
-  if (!username && !id) {
-    return reply.code(400).send({ code: "missing_param", message: "Username or id is required" });
-  }
 
-  const condition = id ? eq(igAccounts.id, id) : eq(igAccounts.username, username!);
-  const existing = (await db.select().from(igAccounts).where(condition).limit(1))[0];
-  if (!existing) {
-    return reply.code(404).send({ code: "not_found", message: "Instagram account not found in database. Connect via Meta OAuth." });
-  }
-
-  // Prevent account takeover / cross-creator hijacking: an account already assigned to another creator cannot be claimed
-  if (existing.creatorId && existing.creatorId !== session.creatorId) {
-    return reply.code(409).send({
-      code: "account_conflict",
-      message: "This Instagram account is already connected to another creator profile.",
-    });
-  }
-
-  // Link to this creator and touch updatedAt to make it active
-  const updated = await db
-    .update(igAccounts)
-    .set({ creatorId: session.creatorId, updatedAt: new Date() })
-    .where(eq(igAccounts.id, existing.id))
-    .returning();
-
-  return { ok: true, account: updated[0] };
-});
 
 /** Unlink an Instagram account from current workspace */
 app.post("/v1/ig/accounts/unlink", async (req, reply) => {
