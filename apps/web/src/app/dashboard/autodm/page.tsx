@@ -153,7 +153,11 @@ export default function AutoDmPage() {
           if (json?.data && Array.isArray(json.data)) {
             setRules(json.data);
             try {
-              localStorage.setItem("sp_cached_rules", JSON.stringify(json.data));
+              if (json.data.length === 0) {
+                localStorage.removeItem("sp_cached_rules");
+              } else {
+                localStorage.setItem("sp_cached_rules", JSON.stringify(json.data));
+              }
             } catch {}
           }
         })

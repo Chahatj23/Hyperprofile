@@ -39,8 +39,8 @@ describe("purgeCloudflareCache", () => {
     globalThis.fetch = mockFetch;
 
     const urls = [
-      "https://hyperprofile.com/jinbandhan",
-      "https://hyperprofile.com/v1/public/pages/jinbandhan",
+      "https://hyperprofile.com/creator-profile",
+      "https://hyperprofile.com/v1/public/pages/creator-profile",
     ];
 
     const result = await purgeCloudflareCache(urls, {

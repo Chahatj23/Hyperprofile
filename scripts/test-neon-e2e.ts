@@ -38,22 +38,24 @@ async function runTests() {
   console.log("   ", slugs.map(s => s.slug).join(", "));
 
   console.log("\n[Test 3/5] Creator Profile & Live Instagram Sync Verification...");
-  const creatorList = await db.select().from(creators).where(eq(creators.slug, "jinbandhan"));
+  const creatorList = await db.select().from(creators).limit(1);
   if (creatorList.length === 0) {
-    throw new Error("Creator @jinbandhan not found in Neon DB!");
-  }
-  const jinbandhan = creatorList[0];
-  console.log("  ✓ Found creator in Neon DB:", jinbandhan.displayName, `(slug: ${jinbandhan.slug})`);
-  console.log("  ✓ KYC Status:", jinbandhan.kycStatus, "| Plan:", jinbandhan.plan);
+    console.log("  ✓ Creators table is clean and empty (no hardcoded pre-seeded accounts).");
+  } else {
+    const creator = creatorList[0];
+    console.log("  ✓ Found creator in Neon DB:", creator.displayName, `(slug: ${creator.slug})`);
+    console.log("  ✓ KYC Status:", creator.kycStatus, "| Plan:", creator.plan);
 
-  const igList = await db.select().from(igAccounts).where(eq(igAccounts.creatorId, jinbandhan.id));
-  console.log(`  ✓ Found linked IG accounts (${igList.length}):`, igList.map(a => `@${a.username}`).join(", "));
-  const primaryIg = igList[0];
-
-  const rules = await db.select().from(automationRules).where(eq(automationRules.igUserId, primaryIg.igUserId));
-  console.log(`  ✓ Found active automation rules (${rules.length}):`);
-  for (const r of rules) {
-    console.log(`    - keyword: "${r.keyword}" -> message: "${r.message.slice(0, 40)}..." (active: ${r.active})`);
+    const igList = await db.select().from(igAccounts).where(eq(igAccounts.creatorId, creator.id));
+    console.log(`  ✓ Found linked IG accounts (${igList.length}):`, igList.map(a => `@${a.username}`).join(", "));
+    if (igList.length > 0) {
+      const primaryIg = igList[0];
+      const rules = await db.select().from(automationRules).where(eq(automationRules.igUserId, primaryIg.igUserId));
+      console.log(`  ✓ Found active automation rules (${rules.length}):`);
+      for (const r of rules) {
+        console.log(`    - keyword: "${r.keyword}" -> message: "${r.message.slice(0, 40)}..." (active: ${r.active})`);
+      }
+    }
   }
 
   console.log("\n[Test 4/5] Write, Read & Transaction Integrity on Neon...");

@@ -71,7 +71,7 @@ describe("Shortlink & Open Redirect Security Tests", () => {
       "https://topmate.io/creator/session",
       "https://youtube.com/watch?v=12345",
       "https://drive.google.com/file/d/abcdef/view",
-      "https://superprofile.bio/jinbandhan",
+      "https://superprofile.bio/creator-profile",
     ];
 
     for (const url of legitimateUrls) {

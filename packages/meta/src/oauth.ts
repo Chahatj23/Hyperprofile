@@ -512,24 +512,7 @@ export async function fetchInstagramProfile(
     if (profile) return profile;
   }
 
-  // 8) Final Fallback: If configured known Instagram account exists and token is valid, connect it
-  const fallbackIgId = opts.knownInstagramId || process.env.META_INSTAGRAM_ACCOUNT_ID || "17841453478293915";
-  if (fallbackIgId) {
-    return {
-      id: fallbackIgId,
-      username: "jinbandhan",
-      name: "Jinbandhan",
-      accountType: "CREATOR",
-      raw: {
-        id: fallbackIgId,
-        username: "jinbandhan",
-        source: "verified_profile_fallback",
-        attemptsCount: attempts.length,
-      },
-    };
-  }
-
   throw new Error(
-    `No Instagram professional account found on this login. Please ensure your Instagram profile is a Creator or Business account and linked to your Facebook Page.`,
+    `No Instagram professional account found on this login. Please ensure your Instagram profile is a Creator or Business account and linked to your Facebook Page in Meta Business Suite.`,
   );
 }
