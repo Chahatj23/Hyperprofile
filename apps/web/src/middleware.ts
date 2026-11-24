@@ -20,25 +20,22 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // 2. Protect /connect route from unauthenticated access
-  // Dashboard routes support interactive Demo Mode for logged-out visitors (superprofile.bio pattern)
+  // 2. Protect all /dashboard routes, /connect, and /insights from unauthenticated access
   if (
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
     pathname === "/connect" ||
-    pathname.startsWith("/connect/")
+    pathname.startsWith("/connect/") ||
+    pathname === "/insights" ||
+    pathname.startsWith("/insights/")
   ) {
     const sessionCookie = request.cookies.get("hp_session");
 
     if (!sessionCookie || !sessionCookie.value) {
       const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("next", pathname);
+      loginUrl.searchParams.set("next", pathname === "/insights" ? "/dashboard/insights" : pathname);
       return NextResponse.redirect(loginUrl);
     }
-  }
-
-  // Handle /insights legacy redirect to /dashboard/insights
-  if (pathname === "/insights" || pathname.startsWith("/insights/")) {
-    const dest = new URL("/dashboard/insights", request.url);
-    return NextResponse.redirect(dest);
   }
 
   return NextResponse.next();
