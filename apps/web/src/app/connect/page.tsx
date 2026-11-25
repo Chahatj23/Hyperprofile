@@ -425,34 +425,22 @@ function ConnectInner() {
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
             <a
               className="cta"
-              href="/v1/auth/instagram/start?direct=1"
+              href="/v1/auth/instagram/start"
               style={{
                 display: "block",
                 textAlign: "center",
-                background: "linear-gradient(135deg, #e1306c 0%, #fd1d1d 50%, #f77737 100%)",
+                background: "linear-gradient(135deg, #1877f2 0%, #0066fe 50%, #e1306c 100%)",
                 color: "#fff",
                 fontWeight: 700,
                 padding: "14px 24px",
                 borderRadius: "10px",
                 textDecoration: "none",
                 fontSize: "1rem",
-                boxShadow: "0 4px 14px rgba(225, 48, 108, 0.35)",
+                boxShadow: "0 4px 14px rgba(0, 102, 254, 0.35)",
               }}
             >
-              📸 Direct Instagram Login (No Facebook Page Required) &rarr;
+              📸 Connect Instagram (Meta Unified Business Login) &rarr;
             </a>
-
-            <a
-              href="/v1/auth/instagram/start"
-              style={{
-                display: "block",
-                textAlign: "center",
-                background: "linear-gradient(135deg, #1877f2 0%, #0c63d4 100%)",
-                color: "#fff",
-                fontWeight: 600,
-                padding: "12px 24px",
-                borderRadius: "10px",
-                textDecoration: "none",
                 fontSize: "0.95rem",
               }}
             >
