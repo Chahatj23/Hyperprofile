@@ -441,11 +441,6 @@ function ConnectInner() {
             >
               📸 Connect Instagram (Meta Unified Business Login) &rarr;
             </a>
-                fontSize: "0.95rem",
-              }}
-            >
-              Connect via Facebook Page / Business Suite &rarr;
-            </a>
           </div>
 
           <div style={{ borderTop: "1px solid var(--line)", paddingTop: "16px", fontSize: "0.82rem", color: "var(--muted)", lineHeight: 1.6 }}>
