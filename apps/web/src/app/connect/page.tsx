@@ -455,7 +455,7 @@ function ConnectInner() {
                 <strong>Meta App Tester Role</strong>: If your Meta App is in Development mode (App ID <code>2808976552852144</code>), add your Instagram username under <strong>Roles &rarr; Instagram Testers</strong> in the Meta Dashboard, and accept the pending invite in your Instagram app (Settings &rarr; Apps and Websites &rarr; Tester Invites).
               </li>
               <li style={{ marginBottom: "6px" }}>
-                <strong>Authorized Redirect URI</strong>: Permanent redirect URI is <code>https://hyperprofile-api-p4a2.onrender.com/v1/auth/instagram/callback</code>.
+                <strong>Authorized Redirect URI</strong>: Permanent redirect URI is <code>https://hyperprofile-api.onrender.com/v1/auth/instagram/callback</code>.
               </li>
             </ol>
             <p style={{ margin: 0 }}>
