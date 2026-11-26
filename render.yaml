@@ -24,7 +24,7 @@ services:
       - key: META_APP_SECRET
         value: a312f94abdf3e10375d1f0610af75e6e
       - key: META_LOGIN_CONFIG_ID
-        value: "1700339118131466"
+        value: "1193730699795662"
       - key: META_WEBHOOK_VERIFY_TOKEN
         value: vg0p4acutjrfdi62n8lko7mysh3q5x9w
       - key: META_GRAPH_VERSION
