@@ -28,17 +28,37 @@ export function buildAuthorizeUrl(
     return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
   }
 
+  if (cfg.configId) {
+    const params = new URLSearchParams({
+      client_id: cfg.appId,
+      config_id: cfg.configId,
+      display: "page",
+      override_default_response_type: "true",
+      redirect_uri: cfg.redirectUri,
+      response_type: "code",
+      state,
+      auth_type: "rerequest",
+    });
+    return `https://www.facebook.com/dialog/oauth?${params.toString()}`;
+  }
+
+  // Standard Graph API OAuth dialog (clean, universally supported, no business configuration restrictions)
+  const version = cfg.graphVersion || "v21.0";
   const params = new URLSearchParams({
     client_id: cfg.appId,
-    config_id: cfg.configId,
-    display: "page",
-    override_default_response_type: "true",
     redirect_uri: cfg.redirectUri,
     response_type: "code",
+    scope: [
+      "instagram_basic",
+      "instagram_manage_comments",
+      "instagram_manage_messages",
+      "pages_show_list",
+      "pages_read_engagement",
+    ].join(","),
     state,
     auth_type: "rerequest",
   });
-  return `https://www.facebook.com/dialog/oauth?${params.toString()}`;
+  return `https://www.facebook.com/${version}/dialog/oauth?${params.toString()}`;
 }
 
 export function signState(payload: string, secret: string): string {
